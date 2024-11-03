@@ -35,8 +35,126 @@ impl Loader {
     fn u8(&mut self) -> u64 {
         u64::from_be_bytes(self.bytes(8).try_into().unwrap())
     }
+
+    fn cpinfo<'a>(&mut self, const_pool: &'a mut ConstPool) -> &'a mut ConstPool {
+        let const_pool_count = self.u2();
+        // Valid constant pool indices start from 1
+        for _ in 1..const_pool_count {
+            let mut c = Const {
+                tag: self.u1(),
+                ..Default::default()
+            };
+            match c.tag {
+                0x01 => {
+                    // UTF8 string literal, 2 bytes length + data
+                    let size = self.u2() as usize;
+                    c.string = String::from_utf8(self.bytes(size)).unwrap();
+                }
+                0x07 => {
+                    // Class index
+                    c.name_index = self.u2();
+                }
+                0x08 => {
+                    // String reference index
+                    c.string_index = self.u2();
+                }
+                0x09 | 0x0a => {
+                    // Field and method: class index + NaT index
+                    c.class_index = self.u2();
+                    c.name_and_type_index = self.u2();
+                }
+                0x0c => {
+                    // Name-and-type
+                    c.name_index = self.u2();
+                    c.desc_index = self.u2();
+                }
+                _ => {
+                    println!("unsupported tag: {}", c.tag);
+                }
+            }
+            const_pool.0.push(c)
+        }
+        const_pool
+    }
+
+    fn interfaces(&mut self, const_pool: &ConstPool) -> Vec<String> {
+        let mut interfaces = vec![];
+        let interface_count = self.u2();
+        for _ in 0..interface_count {
+            interfaces.push(const_pool.resolve(self.u2()));
+        }
+        interfaces
+    }
+
+    fn fields(&mut self, const_pool: &ConstPool) -> Vec<Field> {
+        let mut fields = vec![];
+        let fields_count = self.u2();
+        for _ in 0..fields_count {
+            let name = const_pool.resolve(self.u2());
+            let descriptor = const_pool.resolve(self.u2());
+            fields.push(Field {
+                flags: self.u2(),
+                name,
+                descriptor,
+                attributes: self.attrs(const_pool),
+            })
+        }
+        return fields;
+    }
+
+    fn attrs(&mut self, const_pool: &ConstPool) -> Vec<Attribute> {
+        let mut attrs = vec![];
+        let attributes_count = self.u2();
+        for _ in 0..attributes_count {
+            let name = const_pool.resolve(self.u2());
+            let size = self.u4() as usize;
+            attrs.push(Attribute {
+                name,
+                data: self.bytes(size),
+            })
+        }
+        return attrs;
+    }
 }
 
+#[derive(Default)]
+struct Const {
+    tag: u8,
+    name_index: u16,
+    class_index: u16,
+    name_and_type_index: u16,
+    string_index: u16,
+    desc_index: u16,
+    string: String,
+}
+
+struct ConstPool(Vec<Const>);
+// type ConstPool = Vec<Const>;
+
+impl ConstPool {
+    fn resolve(self, index: u16) -> String {
+        if self.0[(index - 1) as usize].tag == 0x01 {
+            self.0[(index - 1) as usize].string.clone()
+        } else {
+            String::from("")
+        }
+    }
+}
+
+// Field type is used for both, fields and methods
+struct Field {
+    flags: u16,
+    name: String,
+    descriptor: String,
+    attributes: Vec<Attribute>,
+}
+
+// Attributes contain addition information about fields and classes
+// The most useful is "Code" attribute, which contains actual byte code
+struct Attribute {
+    name: String,
+    data: Vec<u8>,
+}
 
 mod tests {
     use super::*;
