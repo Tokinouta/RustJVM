@@ -1,7 +1,6 @@
 use std::{fs::File, io::Read};
 
 struct Loader {
-    // path: String,
     file: File,
 }
 
@@ -36,7 +35,7 @@ impl Loader {
         u64::from_be_bytes(self.bytes(8).try_into().unwrap())
     }
 
-    fn cpinfo<'a>(&mut self, const_pool: &'a mut ConstPool) -> &'a mut ConstPool {
+    fn cpinfo<'a>(&mut self, const_pool: &'a mut ConstPool) {
         let const_pool_count = self.u2();
         // Valid constant pool indices start from 1
         for _ in 1..const_pool_count {
@@ -74,14 +73,14 @@ impl Loader {
             }
             const_pool.0.push(c)
         }
-        const_pool
     }
 
     fn interfaces(&mut self, const_pool: &ConstPool) -> Vec<String> {
         let mut interfaces = vec![];
         let interface_count = self.u2();
         for _ in 0..interface_count {
-            interfaces.push(const_pool.resolve(self.u2()));
+            let c = const_pool.resolve(self.u2());
+            interfaces.push(c);
         }
         interfaces
     }
@@ -128,13 +127,14 @@ struct Const {
     string: String,
 }
 
+#[derive(Default)]
 struct ConstPool(Vec<Const>);
-// type ConstPool = Vec<Const>;
 
 impl ConstPool {
-    fn resolve(self, index: u16) -> String {
-        if self.0[(index - 1) as usize].tag == 0x01 {
-            self.0[(index - 1) as usize].string.clone()
+    fn resolve(&self, index: u16) -> String {
+        let index = (index - 1) as usize;
+        if self.0[index].tag == 0x01 {
+            self.0[index].string.clone()
         } else {
             String::from("")
         }
@@ -154,6 +154,35 @@ struct Field {
 struct Attribute {
     name: String,
     data: Vec<u8>,
+}
+
+#[derive(Default)]
+pub struct Class {
+    const_pool: ConstPool,
+    name: String,
+    Super: String,
+    flags: u16,
+    interfaces: Vec<String>,
+    fields: Vec<Field>,
+    methods: Vec<Field>,
+    attributes: Vec<Attribute>,
+}
+
+pub fn load(path: String) -> Class {
+    let mut loader = Loader::new(path);
+    let mut c = Class::default();
+    loader.u8(); // magic (u32), minor (u16), major (u16)
+    let mut cp = ConstPool::default();
+    loader.cpinfo(&mut cp); // const pool info
+    c.flags = loader.u2(); // access flags
+    c.name = cp.resolve(loader.u2()); // this class
+    c.Super = cp.resolve(loader.u2()); // super class
+    c.interfaces = loader.interfaces(&cp);
+    c.fields = loader.fields(&cp); // fields
+    c.methods = loader.fields(&cp); // methods
+    c.attributes = loader.attrs(&cp); // methods
+    c.const_pool = cp;
+    return c;
 }
 
 mod tests {
