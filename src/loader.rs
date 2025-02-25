@@ -158,31 +158,39 @@ struct Attribute {
 
 #[derive(Default)]
 pub struct Class {
+    major_version: u16,
+    minor_version: u16,
     const_pool: ConstPool,
-    name: String,
-    Super: String,
     flags: u16,
+    this_class: String,
+    super_class: String,
     interfaces: Vec<String>,
     fields: Vec<Field>,
     methods: Vec<Field>,
     attributes: Vec<Attribute>,
 }
 
-pub fn load(path: String) -> Class {
-    let mut loader = Loader::new(path);
-    let mut c = Class::default();
-    loader.u8(); // magic (u32), minor (u16), major (u16)
-    let mut cp = ConstPool::default();
-    loader.cpinfo(&mut cp); // const pool info
-    c.flags = loader.u2(); // access flags
-    c.name = cp.resolve(loader.u2()); // this class
-    c.Super = cp.resolve(loader.u2()); // super class
-    c.interfaces = loader.interfaces(&cp);
-    c.fields = loader.fields(&cp); // fields
-    c.methods = loader.fields(&cp); // methods
-    c.attributes = loader.attrs(&cp); // methods
-    c.const_pool = cp;
-    return c;
+impl Class {
+    pub fn load(path: String) -> Class {
+        let mut loader = Loader::new(path);
+        let mut c = Class::default();
+        let magic = loader.u4();
+        assert_eq!(magic, 0xcafebabe, "Error: Invalid magic number");
+        c.major_version = loader.u2();
+        c.minor_version = loader.u2();
+
+        let mut cp = ConstPool::default();
+        loader.cpinfo(&mut cp); // const pool info
+        c.flags = loader.u2(); // access flags
+        c.this_class = cp.resolve(loader.u2()); // this class
+        c.super_class = cp.resolve(loader.u2()); // super class
+        c.interfaces = loader.interfaces(&cp);
+        c.fields = loader.fields(&cp); // fields
+        c.methods = loader.fields(&cp); // methods
+        c.attributes = loader.attrs(&cp); // methods
+        c.const_pool = cp;
+        return c;
+    }
 }
 
 mod tests {
