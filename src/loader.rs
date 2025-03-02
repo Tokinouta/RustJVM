@@ -1,6 +1,8 @@
-use std::{fs::File, io::Read};
+use std::{cell::RefCell, fs::File, io::Read, rc::Rc};
 
-struct Loader {
+use crate::classfile::Const;
+
+pub struct Loader {
     file: File,
 }
 
@@ -35,77 +37,88 @@ impl Loader {
         u64::from_be_bytes(self.bytes(8).try_into().unwrap())
     }
 
-    fn cpinfo<'a>(&mut self, const_pool: &'a mut ConstPool) {
+    fn cpinfo<'a>(&mut self, const_pool: Rc<RefCell<ConstPool>>) {
         let const_pool_count = self.u2();
         // Valid constant pool indices start from 1
         for _ in 1..const_pool_count {
-            let mut c = Const {
-                tag: self.u1(),
-                ..Default::default()
-            };
-            match c.tag {
+            let tag = self.u1();
+            let c = match tag {
                 0x01 => {
                     // UTF8 string literal, 2 bytes length + data
                     let size = self.u2() as usize;
-                    c.string = String::from_utf8(self.bytes(size)).unwrap();
+                    Const::Utf8(String::from_utf8(self.bytes(size)).unwrap())
                 }
+                0x03 => Const::Integer(self.u4() as i32),
+                0x04 => Const::Float(f32::from_bits(self.u4())),
+                0x05 => Const::Long(self.u8() as i64),
+                0x06 => Const::Double(f64::from_bits(self.u8())),
                 0x07 => {
-                    // Class index
-                    c.name_index = self.u2();
+                    Const::Class {
+                        cp: const_pool.clone(),
+                        name_index: self.u2(), // Class index
+                    }
                 }
                 0x08 => {
-                    // String reference index
-                    c.string_index = self.u2();
+                    Const::String {
+                        cp: const_pool.clone(),
+                        string_index: self.u2(), // String reference index
+                    }
                 }
-                0x09 | 0x0a => {
-                    // Field and method: class index + NaT index
-                    c.class_index = self.u2();
-                    c.name_and_type_index = self.u2();
-                }
-                0x0c => {
-                    // Name-and-type
-                    c.name_index = self.u2();
-                    c.desc_index = self.u2();
-                }
+                0x09 => Const::FieldRef {
+                    cp: const_pool.clone(),
+                    class_index: self.u2(),
+                    name_and_type_index: self.u2(),
+                },
+                0x0a => Const::MethodRef {
+                    cp: const_pool.clone(),
+                    class_index: self.u2(),
+                    name_and_type_index: self.u2(),
+                },
+                0x0c => Const::NameAndType {
+                    cp: const_pool.clone(),
+                    name_index: self.u2(),
+                    descriptor_index: self.u2(),
+                },
                 _ => {
-                    println!("unsupported tag: {}", c.tag);
+                    println!("unsupported tag: {}", tag);
+                    continue;
                 }
-            }
-            const_pool.0.push(c)
+            };
+            const_pool.borrow_mut().0.push(c)
         }
     }
 
-    fn interfaces(&mut self, const_pool: &ConstPool) -> Vec<String> {
+    fn interfaces(&mut self, const_pool: Rc<RefCell<ConstPool>>) -> Vec<String> {
         let mut interfaces = vec![];
         let interface_count = self.u2();
         for _ in 0..interface_count {
-            let c = const_pool.resolve(self.u2());
+            let c = const_pool.borrow().resolve(self.u2());
             interfaces.push(c);
         }
         interfaces
     }
 
-    fn fields(&mut self, const_pool: &ConstPool) -> Vec<Field> {
+    fn fields(&mut self, const_pool: Rc<RefCell<ConstPool>>) -> Vec<Field> {
         let mut fields = vec![];
         let fields_count = self.u2();
         for _ in 0..fields_count {
-            let name = const_pool.resolve(self.u2());
-            let descriptor = const_pool.resolve(self.u2());
+            let name = const_pool.borrow().resolve(self.u2());
+            let descriptor = const_pool.borrow().resolve(self.u2());
             fields.push(Field {
                 flags: self.u2(),
                 name,
                 descriptor,
-                attributes: self.attrs(const_pool),
+                attributes: self.attrs(const_pool.clone()),
             })
         }
         return fields;
     }
 
-    fn attrs(&mut self, const_pool: &ConstPool) -> Vec<Attribute> {
+    fn attrs(&mut self, const_pool: Rc<RefCell<ConstPool>>) -> Vec<Attribute> {
         let mut attrs = vec![];
         let attributes_count = self.u2();
         for _ in 0..attributes_count {
-            let name = const_pool.resolve(self.u2());
+            let name = const_pool.borrow().resolve(self.u2());
             let size = self.u4() as usize;
             attrs.push(Attribute {
                 name,
@@ -116,28 +129,32 @@ impl Loader {
     }
 }
 
-#[derive(Default)]
-struct Const {
-    tag: u8,
-    name_index: u16,
-    class_index: u16,
-    name_and_type_index: u16,
-    string_index: u16,
-    desc_index: u16,
-    string: String,
-}
+// #[derive(Default)]
+// struct Const {
+//     tag: u8,
+//     name_index: u16,
+//     class_index: u16,
+//     name_and_type_index: u16,
+//     string_index: u16,
+//     desc_index: u16,
+//     string: String,
+// }
 
 #[derive(Default)]
-struct ConstPool(Vec<Const>);
+pub struct ConstPool(Vec<Const>);
 
 impl ConstPool {
     fn resolve(&self, index: u16) -> String {
         let index = (index - 1) as usize;
-        if self.0[index].tag == 0x01 {
-            self.0[index].string.clone()
-        } else {
-            String::from("")
+        match &self.0[index] {
+            Const::Utf8(s) => s.clone(),
+            _ => String::from(""),
         }
+        // if self.0[index].tag == 0x01 {
+        //     self.0[index].string.clone()
+        // } else {
+        //     String::from("")
+        // }
     }
 }
 
@@ -160,7 +177,7 @@ struct Attribute {
 pub struct Class {
     major_version: u16,
     minor_version: u16,
-    const_pool: ConstPool,
+    const_pool: Rc<RefCell<ConstPool>>,
     flags: u16,
     this_class: String,
     super_class: String,
@@ -179,15 +196,15 @@ impl Class {
         c.major_version = loader.u2();
         c.minor_version = loader.u2();
 
-        let mut cp = ConstPool::default();
-        loader.cpinfo(&mut cp); // const pool info
+        let cp = Rc::new(RefCell::new(ConstPool::default()));
+        loader.cpinfo(cp.clone()); // const pool info
         c.flags = loader.u2(); // access flags
-        c.this_class = cp.resolve(loader.u2()); // this class
-        c.super_class = cp.resolve(loader.u2()); // super class
-        c.interfaces = loader.interfaces(&cp);
-        c.fields = loader.fields(&cp); // fields
-        c.methods = loader.fields(&cp); // methods
-        c.attributes = loader.attrs(&cp); // methods
+        c.this_class = cp.borrow_mut().resolve(loader.u2()); // this class
+        c.super_class = cp.borrow_mut().resolve(loader.u2()); // super class
+        c.interfaces = loader.interfaces(cp.clone());
+        c.fields = loader.fields(cp.clone()); // fields
+        c.methods = loader.fields(cp.clone()); // methods
+        c.attributes = loader.attrs(cp.clone()); // methods
         c.const_pool = cp;
         return c;
     }

@@ -1,4 +1,5 @@
 pub mod classpath;
+pub mod classfile;
 pub mod loader;
 
 // use clap to handle command line arguments
