@@ -1,6 +1,9 @@
 use std::{cell::RefCell, fs::File, io::Read, rc::Rc};
 
-use crate::classfile::Const;
+use crate::{
+    attribute::{Attribute, ExceptionTable, LineNumberTableEntry, LocalVariableTableEntry},
+    classfile::Const,
+};
 
 pub struct Loader {
     file: File,
@@ -120,10 +123,83 @@ impl Loader {
         for _ in 0..attributes_count {
             let name = const_pool.borrow().resolve(self.u2());
             let size = self.u4() as usize;
-            attrs.push(Attribute {
-                name,
-                data: self.bytes(size),
-            })
+            // attrs.push(Attribute {
+            //     name,
+            //     data: self.bytes(size),
+            // })
+            let attr = match name.as_str() {
+                "Code" => {
+                    let max_stack = self.u2();
+                    let max_locals = self.u2();
+                    let code_length = self.u4() as usize;
+                    let code = self.bytes(code_length);
+                    let exception_table_length = self.u2();
+                    let mut exception_table = Vec::new();
+                    for _ in 0..exception_table_length {
+                        let start_pc = self.u2();
+                        let end_pc = self.u2();
+                        let handler_pc = self.u2();
+                        let catch_type = self.u2();
+                        exception_table.push(ExceptionTable::new(
+                            start_pc, end_pc, handler_pc, catch_type,
+                        ));
+                    }
+                    let attributes = self.attrs(const_pool.clone());
+                    Attribute::Code {
+                        cp: const_pool.clone(),
+                        max_stack,
+                        max_locals,
+                        code,
+                        exception_table,
+                        attributes,
+                    }
+                }
+                "ConstantValue" => Attribute::ConstantValue(self.u2()),
+                "Deprecated" => Attribute::Deprecated,
+                "Exceptions" => {
+                    let number_of_exceptions = self.u2();
+                    let mut exception_index_table = vec![];
+                    for _ in 0..number_of_exceptions {
+                        exception_index_table.push(self.u2());
+                    }
+                    Attribute::Exceptions {
+                        exception_index_table,
+                    }
+                }
+                "LineNumberTable" => {
+                    let line_number_table_length = self.u2();
+                    let mut line_number_table = vec![];
+                    for _ in 0..line_number_table_length {
+                        let start_pc = self.u2();
+                        let line_number = self.u2();
+                        line_number_table.push(LineNumberTableEntry::new(start_pc, line_number));
+                    }
+                    Attribute::LineNumberTable { line_number_table }
+                }
+                "LocalVariableTable" => {
+                    let local_variable_table_length = self.u2();
+                    let mut local_variable_table = vec![];
+                    for _ in 0..local_variable_table_length {
+                        let start_pc = self.u2();
+                        let line_number = self.u2();
+                        local_variable_table
+                            .push(LocalVariableTableEntry::new(start_pc, line_number));
+                    }
+                    Attribute::LocalVariableTable {
+                        local_variable_table,
+                    }
+                }
+                "SourceFile" => {
+                    let index = self.u2();
+                    Attribute::SourceFile {
+                        cp: const_pool.clone(),
+                        index,
+                    }
+                }
+                "Synthetic" => Attribute::Synthetic,
+                _ => continue,
+            };
+            attrs.push(attr);
         }
         return attrs;
     }
@@ -168,10 +244,6 @@ struct Field {
 
 // Attributes contain addition information about fields and classes
 // The most useful is "Code" attribute, which contains actual byte code
-struct Attribute {
-    name: String,
-    data: Vec<u8>,
-}
 
 #[derive(Default)]
 pub struct Class {

@@ -1,3 +1,4 @@
+pub mod attribute;
 pub mod classpath;
 pub mod classfile;
 pub mod loader;
