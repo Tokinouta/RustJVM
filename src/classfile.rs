@@ -1,7 +1,5 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::loader::{ConstPool, Loader};
-
 #[repr(u8)]
 pub enum Const {
     Utf8(String), // 标签值 1
@@ -66,6 +64,19 @@ pub enum Const {
     }, // 标签值 20
 }
 
-trait ConstantInfo {
-    fn read_info(&mut self, reader: &mut Loader);
+#[derive(Default)]
+pub struct ConstPool(Vec<Const>);
+
+impl ConstPool {
+    pub fn resolve(&self, index: u16) -> String {
+        let index = (index - 1) as usize;
+        match &self.0[index] {
+            Const::Utf8(s) => s.clone(),
+            _ => String::from(""),
+        }
+    }
+
+    pub fn push(&mut self, c: Const) {
+        self.0.push(c);
+    }
 }

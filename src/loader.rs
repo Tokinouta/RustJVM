@@ -2,7 +2,7 @@ use std::{cell::RefCell, fs::File, io::Read, rc::Rc};
 
 use crate::{
     attribute::{Attribute, ExceptionTable, LineNumberTableEntry, LocalVariableTableEntry},
-    classfile::Const,
+    classfile::{Const, ConstPool},
 };
 
 pub struct Loader {
@@ -77,17 +77,49 @@ impl Loader {
                     class_index: self.u2(),
                     name_and_type_index: self.u2(),
                 },
+                0x0b => Const::InterfaceMethodRef {
+                    cp: const_pool.clone(),
+                    class_index: self.u2(),
+                    name_and_type_index: self.u2(),
+                },
                 0x0c => Const::NameAndType {
                     cp: const_pool.clone(),
                     name_index: self.u2(),
                     descriptor_index: self.u2(),
+                },
+                0x0f => Const::MethodHandle {
+                    cp: const_pool.clone(),
+                    reference_kind: self.u1(),
+                    reference_index: self.u2(),
+                },
+                0x10 => Const::MethodType {
+                    cp: const_pool.clone(),
+                    descriptor_index: self.u2(),
+                },
+                0x11 => Const::Dynamic {
+                    cp: const_pool.clone(),
+                    bootstrap_method_attr_index: self.u2(),
+                    name_and_type_index: self.u2(),
+                },
+                0x12 => Const::InvokeDynamic {
+                    cp: const_pool.clone(),
+                    bootstrap_method_attr_index: self.u2(),
+                    name_and_type_index: self.u2(),
+                },
+                0x13 => Const::Module {
+                    cp: const_pool.clone(),
+                    name_index: self.u2(),
+                },
+                0x14 => Const::Package {
+                    cp: const_pool.clone(),
+                    name_index: self.u2(),
                 },
                 _ => {
                     println!("unsupported tag: {}", tag);
                     continue;
                 }
             };
-            const_pool.borrow_mut().0.push(c)
+            const_pool.borrow_mut().push(c)
         }
     }
 
@@ -202,35 +234,6 @@ impl Loader {
             attrs.push(attr);
         }
         return attrs;
-    }
-}
-
-// #[derive(Default)]
-// struct Const {
-//     tag: u8,
-//     name_index: u16,
-//     class_index: u16,
-//     name_and_type_index: u16,
-//     string_index: u16,
-//     desc_index: u16,
-//     string: String,
-// }
-
-#[derive(Default)]
-pub struct ConstPool(Vec<Const>);
-
-impl ConstPool {
-    fn resolve(&self, index: u16) -> String {
-        let index = (index - 1) as usize;
-        match &self.0[index] {
-            Const::Utf8(s) => s.clone(),
-            _ => String::from(""),
-        }
-        // if self.0[index].tag == 0x01 {
-        //     self.0[index].string.clone()
-        // } else {
-        //     String::from("")
-        // }
     }
 }
 

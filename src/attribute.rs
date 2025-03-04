@@ -1,11 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::loader::ConstPool;
-// struct Attribute {
-//     name: String,
-//     data: Vec<u8>,
-// }
+use crate::classfile::ConstPool;
 
 pub struct ExceptionTable {
     start_pc: u16,
