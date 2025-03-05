@@ -2,6 +2,7 @@ pub mod attribute;
 pub mod classpath;
 pub mod classfile;
 pub mod loader;
+pub mod runtime_data_area;
 
 // use clap to handle command line arguments
 use clap::{arg, Parser};
