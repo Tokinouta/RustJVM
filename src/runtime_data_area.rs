@@ -1,17 +1,17 @@
 use std::{cell::RefCell, rc::Rc};
 
-struct Object {
+pub struct Object {
     // class: Class,
     // fields: Vec<Value>,
 }
 
 #[derive(Clone)]
-struct Slot{
+pub struct Slot{
     num: i32,
     objref: Option<Rc<RefCell<Object>>>,
 }
 
-struct LocalVars {
+pub struct LocalVars {
     slots: Vec<Slot>,
 }
 
@@ -71,7 +71,7 @@ impl LocalVars {
     }
 }
 
-struct OperandStack {
+pub struct OperandStack {
     size: usize,
     slots: Vec<Slot>,
 }
@@ -141,7 +141,7 @@ impl OperandStack {
     }
 }
 
-struct Frame {
+pub struct Frame {
     lower: Option<Box<Frame>>,
     local_vars: Vec<i32>,
     operand_stack: Stack,
@@ -157,7 +157,7 @@ impl Frame {
     }
 }
 
-struct Stack {
+pub struct Stack {
     max_size: usize,
     size: usize,
     top: Option<Box<Frame>>,
@@ -206,7 +206,7 @@ impl Stack {
     }
 }
 
-struct Thread {
+pub struct Thread {
     pc: usize,
     stack: Box<Stack>,
 }
