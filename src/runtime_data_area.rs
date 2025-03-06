@@ -239,3 +239,59 @@ impl Thread {
         self.stack.top()
     }
 }
+
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_local_vars() {
+        let mut local_vars = LocalVars::new(10);
+        local_vars.set_int(0, 100);
+        assert_eq!(local_vars.get_int(0), 100);
+
+        local_vars.set_float(1, 3.14);
+        assert_eq!(local_vars.get_float(1), 3.14);
+
+        local_vars.set_long(2, 2997924580);
+        assert_eq!(local_vars.get_long(2), 2997924580);
+
+        local_vars.set_double(4, 2.71828182845);
+        assert_eq!(local_vars.get_double(4), 2.71828182845);
+    }
+
+    #[test]
+    fn test_operand_stack() {
+        let mut operand_stack = OperandStack::new(10);
+        operand_stack.push_int(100);
+        assert_eq!(operand_stack.pop_int(), 100);
+
+        operand_stack.push_float(3.14);
+        assert_eq!(operand_stack.pop_float(), 3.14);
+
+        operand_stack.push_long(2997924580);
+        assert_eq!(operand_stack.pop_long(), 2997924580);
+
+        operand_stack.push_double(2.71828182845);
+        assert_eq!(operand_stack.pop_double(), 2.71828182845);
+    }
+
+    #[test]
+    fn test_stack() {
+        let mut stack = Stack::new(10);
+        let frame = Frame::new(10, 10);
+        stack.push(frame);
+        assert_eq!(stack.size, 1);
+        let frame = stack.pop();
+        assert_eq!(stack.size, 0);
+    }
+
+    #[test]
+    fn test_thread() {
+        let mut thread = Thread::new();
+        let frame = Frame::new(10, 10);
+        thread.push_frame(frame);
+        assert_eq!(thread.stack.size, 1);
+        let frame = thread.pop_frame();
+        assert_eq!(thread.stack.size, 0);
+    }
+}
