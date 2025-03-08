@@ -1,5 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
+#[derive(PartialEq)]
 pub struct Object {
     // class: Class,
     // fields: Vec<Value>,
@@ -165,6 +166,10 @@ impl Frame {
             operand_stack: OperandStack::new(max_stack),
         }
     }
+
+    pub fn thread(&mut self) -> &mut Thread {
+        todo!()
+    }
 }
 
 pub struct Stack {
@@ -222,30 +227,30 @@ pub struct Thread {
 }
 
 impl Thread {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             pc: 0,
             stack: Box::new(Stack::new(1024)),
         }
     }
 
-    fn pc(&self) -> usize {
+    pub fn pc(&self) -> usize {
         self.pc
     }
 
-    fn set_pc(&mut self, pc: usize) {
+    pub fn set_pc(&mut self, pc: usize) {
         self.pc = pc;
     }
 
-    fn push_frame(&mut self, frame: Frame) {
+    pub fn push_frame(&mut self, frame: Frame) {
         self.stack.push(frame);
     }
 
-    fn pop_frame(&mut self) -> Box<Frame> {
+    pub fn pop_frame(&mut self) -> Box<Frame> {
         self.stack.pop()
     }
 
-    fn current_frame(&self) -> &Frame {
+    pub fn current_frame(&self) -> &Frame {
         self.stack.top()
     }
 }

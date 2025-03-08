@@ -48,6 +48,15 @@ impl BytecodeReader {
         (byte1 << 24) | (byte2 << 16) | (byte3 << 8) | byte4
     }
 
+    pub fn read_i32(&mut self) -> i32 {
+        let byte1 = self.code[self.pc] as i32;
+        let byte2 = self.code[self.pc + 1] as i32;
+        let byte3 = self.code[self.pc + 2] as i32;
+        let byte4 = self.code[self.pc + 3] as i32;
+        self.pc += 4;
+        (byte1 << 24) | (byte2 << 16) | (byte3 << 8) | byte4
+    }
+
     pub fn pc(&self) -> usize {
         self.pc
     }
