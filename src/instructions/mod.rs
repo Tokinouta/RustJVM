@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::runtime_data_area::Frame;
 
-mod bytecode_reader;
+pub mod bytecode_reader;
 enum InstructionType {
     NoOperand,
     Branch { offset: i16 },
@@ -33,7 +33,7 @@ impl InstructionOp for InstructionType {
 }
 
 #[rustfmt::skip]
-enum Instruction {
+pub enum Instruction {
     Nop,
     AconstNull,
     Iconst0, Iconst1, Iconst2, Iconst3, Iconst4, Iconst5, IconstM1,
@@ -61,7 +61,7 @@ enum Instruction {
     Idiv, Ldiv, Fdiv, Ddiv, 
     Irem, Lrem, Frem, Drem,
     Ishl, Lshl, Ishr, Lshr, Iushr, Lushr,
-    Iand, Land, Ior, Lor, IXor, Lxor,
+    Iand, Land, Ior, Lor, Ixor, Lxor,
     Iinc(u16, i32),
     I2l, I2f, I2d,
     L2i, L2f, L2d,
@@ -96,7 +96,7 @@ enum Instruction {
 }
 
 impl Instruction {
-    fn fetch_operands(&mut self, reader: &mut bytecode_reader::BytecodeReader) {
+    pub fn fetch_operands(&mut self, reader: &mut bytecode_reader::BytecodeReader) {
         match self {
             Self::Nop => {}
             Self::AconstNull => {}
@@ -219,7 +219,7 @@ impl Instruction {
             Self::Land => {}
             Self::Ior => {}
             Self::Lor => {}
-            Self::IXor => {}
+            Self::Ixor => {}
             Self::Lxor => {}
             Self::Iinc(ref mut index, ref mut const_num) => {
                 *index = reader.read_u8() as u16;
@@ -322,7 +322,7 @@ impl Instruction {
         }
     }
 
-    fn execute(&mut self, frame: &mut Frame) {
+    pub fn execute(&mut self, frame: &mut Frame) {
         match self {
             Self::Nop => {}
             Self::AconstNull => frame.operand_stack.push_ref(None),
@@ -658,7 +658,7 @@ impl Instruction {
                 let val1 = frame.operand_stack.pop_long();
                 frame.operand_stack.push_long(val1 | val2);
             }
-            Self::IXor => {
+            Self::Ixor => {
                 let val2 = frame.operand_stack.pop_int();
                 let val1 = frame.operand_stack.pop_int();
                 frame.operand_stack.push_int(val1 ^ val2);
@@ -966,11 +966,10 @@ impl Instruction {
     }
 
     fn branch(frame: &mut Frame, offset: usize) {
-        let pc = frame.thread().pc();
+        let pc = frame.thread().unwrap().borrow().pc();
         // if pc + offset < 0 || pc + offset > frame.method().code_len() as i32 {
         //     panic!("branch out of range")
         // }
-        frame.thread().set_pc(pc + offset);
-        todo!()
+        frame.thread().unwrap().borrow_mut().set_pc(pc + offset);
     }
 }

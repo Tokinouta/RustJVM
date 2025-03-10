@@ -1,5 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
+use crate::{attribute::Attribute, loader::Loader};
+
 #[repr(u8)]
 pub enum Const {
     Utf8(String), // 标签值 1
@@ -78,5 +80,76 @@ impl ConstPool {
 
     pub fn push(&mut self, c: Const) {
         self.0.push(c);
+    }
+}
+
+// Field type is used for both, fields and methods
+pub struct Field {
+    flags: u16,
+    name: String,
+    descriptor: String,
+    attributes: Vec<Attribute>,
+}
+
+impl Field {
+    pub fn new(flags: u16, name: String, descriptor: String, attributes: Vec<Attribute>) -> Self {
+        Self {
+            flags,
+            name,
+            descriptor,
+            attributes,
+        }
+    }
+
+    pub fn get_code(&self) -> Option<&Attribute> {
+        self.attributes.iter().find(|a| match a {
+            Attribute::Code { .. } => true,
+            _ => false,
+        })
+    }
+}
+
+// Attributes contain addition information about fields and classes
+// The most useful is "Code" attribute, which contains actual byte code
+
+#[derive(Default)]
+pub struct Class {
+    major_version: u16,
+    minor_version: u16,
+    const_pool: Rc<RefCell<ConstPool>>,
+    flags: u16,
+    this_class: String,
+    super_class: String,
+    interfaces: Vec<String>,
+    fields: Vec<Field>,
+    methods: Vec<Field>,
+    attributes: Vec<Attribute>,
+}
+
+impl Class {
+    pub fn new(
+        major_version: u16,
+        minor_version: u16,
+        const_pool: Rc<RefCell<ConstPool>>,
+        flags: u16,
+        this_class: String,
+        super_class: String,
+        interfaces: Vec<String>,
+        fields: Vec<Field>,
+        methods: Vec<Field>,
+        attributes: Vec<Attribute>,
+    ) -> Self {
+        Self {
+            major_version,
+            minor_version,
+            const_pool,
+            flags,
+            this_class,
+            super_class,
+            interfaces,
+            fields,
+            methods,
+            attributes,
+        }
     }
 }

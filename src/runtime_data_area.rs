@@ -1,4 +1,7 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::{Ref, RefCell},
+    rc::{Rc, Weak},
+};
 
 #[derive(PartialEq)]
 pub struct Object {
@@ -7,19 +10,27 @@ pub struct Object {
 }
 
 #[derive(Clone)]
-pub struct Slot{
+pub struct Slot {
     num: i32,
     objref: Option<Rc<RefCell<Object>>>,
 }
 
 pub struct LocalVars {
+    max_locals: usize,
     slots: Vec<Slot>,
 }
 
 impl LocalVars {
     pub fn new(max_locals: usize) -> Self {
         Self {
-            slots: vec![Slot { num: 0, objref: None }; max_locals],
+            max_locals,
+            slots: vec![
+                Slot {
+                    num: 0,
+                    objref: None
+                };
+                max_locals
+            ],
         }
     }
 
@@ -81,7 +92,13 @@ impl OperandStack {
     pub fn new(max_stack: usize) -> Self {
         Self {
             size: 0,
-            slots: vec![Slot { num: 0, objref: None }; max_stack],
+            slots: vec![
+                Slot {
+                    num: 0,
+                    objref: None
+                };
+                max_stack
+            ],
         }
     }
 
@@ -156,19 +173,27 @@ pub struct Frame {
     pub lower: Option<Box<Frame>>,
     pub local_vars: LocalVars,
     pub operand_stack: OperandStack,
+    pub thread: Weak<RefCell<Thread>>,
+    next_pc: usize,
 }
 
 impl Frame {
-    fn new(max_locals: usize, max_stack: usize) -> Self {
+    pub fn new(max_locals: usize, max_stack: usize, thread: Weak<RefCell<Thread>>) -> Self {
         Self {
             lower: None,
             local_vars: LocalVars::new(max_locals),
             operand_stack: OperandStack::new(max_stack),
+            thread,
+            next_pc: 0,
         }
     }
 
-    pub fn thread(&mut self) -> &mut Thread {
-        todo!()
+    pub fn thread(&mut self) -> Option<Rc<RefCell<Thread>>> {
+        self.thread.upgrade()
+    }
+
+    pub fn next_pc(&self) -> usize {
+        self.next_pc
     }
 }
 
@@ -179,7 +204,7 @@ pub struct Stack {
 }
 
 impl Stack {
-    fn new(max_size: usize) -> Self {
+    pub fn new(max_size: usize) -> Self {
         Self {
             max_size,
             size: 0,
@@ -187,7 +212,7 @@ impl Stack {
         }
     }
 
-    fn push(&mut self, mut frame: Frame) {
+    pub fn push(&mut self, mut frame: Frame) {
         if self.size >= self.max_size {
             panic!("java.lang.StackOverflowError");
         }
@@ -197,7 +222,7 @@ impl Stack {
         self.size += 1;
     }
 
-    fn pop(&mut self) -> Box<Frame> {
+    pub fn pop(&mut self) -> Box<Frame> {
         let frame = match &self.top {
             Some(_) => self.top.take(),
             None => panic!("jvm stack is empty"),
@@ -208,29 +233,33 @@ impl Stack {
                 self.top = f.lower;
                 f.lower = None;
                 f
-            },
+            }
             None => panic!("jvm stack is empty"),
         }
     }
 
-    fn top(&self) -> &Frame {
+    pub fn top(&self) -> &Frame {
         match &self.top {
             Some(f) => f,
             None => panic!("jvm stack is empty"),
         }
     }
+
+    pub fn size(&self) -> usize {
+        self.size
+    }
 }
 
 pub struct Thread {
     pc: usize,
-    stack: Box<Stack>,
+    stack: Rc<RefCell<Stack>>,
 }
 
 impl Thread {
     pub fn new() -> Self {
         Self {
             pc: 0,
-            stack: Box::new(Stack::new(1024)),
+            stack: Rc::new(RefCell::new(Stack::new(1024))),
         }
     }
 
@@ -243,19 +272,21 @@ impl Thread {
     }
 
     pub fn push_frame(&mut self, frame: Frame) {
-        self.stack.push(frame);
+        self.stack.borrow_mut().push(frame);
     }
 
     pub fn pop_frame(&mut self) -> Box<Frame> {
-        self.stack.pop()
+        self.stack.borrow_mut().pop()
     }
 
-    pub fn current_frame(&self) -> &Frame {
-        self.stack.top()
+    pub fn current_frame(&self) -> Ref<Frame> {
+        Ref::map(self.stack.borrow(), |stack| stack.top())
     }
 }
 
 mod test {
+    use std::os::unix::thread;
+
     use super::*;
 
     #[test]
@@ -293,7 +324,8 @@ mod test {
     #[test]
     fn test_stack() {
         let mut stack = Stack::new(10);
-        let frame = Frame::new(10, 10);
+        let thread = Rc::new(RefCell::new(Thread::new()));
+        let frame = Frame::new(10, 10, Rc::downgrade(&thread));
         stack.push(frame);
         assert_eq!(stack.size, 1);
         let frame = stack.pop();
@@ -302,11 +334,11 @@ mod test {
 
     #[test]
     fn test_thread() {
-        let mut thread = Thread::new();
-        let frame = Frame::new(10, 10);
-        thread.push_frame(frame);
-        assert_eq!(thread.stack.size, 1);
-        let frame = thread.pop_frame();
-        assert_eq!(thread.stack.size, 0);
+        let thread = Rc::new(RefCell::new(Thread::new()));
+        let frame = Frame::new(10, 10, Rc::downgrade(&thread));
+        thread.borrow_mut().push_frame(frame);
+        assert_eq!(thread.borrow().stack.borrow().size(), 1);
+        let frame = thread.borrow_mut().pop_frame();
+        assert_eq!(thread.borrow().stack.borrow().size(), 0);
     }
 }

@@ -8,8 +8,12 @@ impl BytecodeReader {
         Self { pc: 0, code }
     }
 
-    pub fn reset(&mut self, code: Vec<u8>, pc: usize) {
-        self.code = code;
+    // pub fn reset(&mut self, code: Vec<u8>, pc: usize) {
+    //     self.code = code;
+    //     self.pc = pc;
+    // }
+
+    pub fn reset(&mut self, pc: usize) {
         self.pc = pc;
     }
 

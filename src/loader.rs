@@ -2,7 +2,7 @@ use std::{cell::RefCell, fs::File, io::Read, rc::Rc};
 
 use crate::{
     attribute::{Attribute, ExceptionTable, LineNumberTableEntry, LocalVariableTableEntry},
-    classfile::{Const, ConstPool},
+    classfile::{Class, Const, ConstPool, Field},
 };
 
 pub struct Loader {
@@ -139,12 +139,12 @@ impl Loader {
         for _ in 0..fields_count {
             let name = const_pool.borrow().resolve(self.u2());
             let descriptor = const_pool.borrow().resolve(self.u2());
-            fields.push(Field {
-                flags: self.u2(),
+            fields.push(Field::new(
+                self.u2(),
                 name,
                 descriptor,
-                attributes: self.attrs(const_pool.clone()),
-            })
+                self.attrs(const_pool.clone()),
+            ))
         }
         return fields;
     }
@@ -235,53 +235,37 @@ impl Loader {
         }
         return attrs;
     }
-}
 
-// Field type is used for both, fields and methods
-struct Field {
-    flags: u16,
-    name: String,
-    descriptor: String,
-    attributes: Vec<Attribute>,
-}
-
-// Attributes contain addition information about fields and classes
-// The most useful is "Code" attribute, which contains actual byte code
-
-#[derive(Default)]
-pub struct Class {
-    major_version: u16,
-    minor_version: u16,
-    const_pool: Rc<RefCell<ConstPool>>,
-    flags: u16,
-    this_class: String,
-    super_class: String,
-    interfaces: Vec<String>,
-    fields: Vec<Field>,
-    methods: Vec<Field>,
-    attributes: Vec<Attribute>,
-}
-
-impl Class {
     pub fn load(path: String) -> Class {
-        let mut loader = Loader::new(path);
+        let mut loader = Self::new(path);
         let mut c = Class::default();
         let magic = loader.u4();
         assert_eq!(magic, 0xcafebabe, "Error: Invalid magic number");
-        c.major_version = loader.u2();
-        c.minor_version = loader.u2();
+        let major_version = loader.u2();
+        let minor_version = loader.u2();
 
         let cp = Rc::new(RefCell::new(ConstPool::default()));
         loader.cpinfo(cp.clone()); // const pool info
-        c.flags = loader.u2(); // access flags
-        c.this_class = cp.borrow_mut().resolve(loader.u2()); // this class
-        c.super_class = cp.borrow_mut().resolve(loader.u2()); // super class
-        c.interfaces = loader.interfaces(cp.clone());
-        c.fields = loader.fields(cp.clone()); // fields
-        c.methods = loader.fields(cp.clone()); // methods
-        c.attributes = loader.attrs(cp.clone()); // methods
-        c.const_pool = cp;
-        return c;
+        let flags = loader.u2(); // access flags
+        let this_class = cp.borrow_mut().resolve(loader.u2()); // this class
+        let super_class = cp.borrow_mut().resolve(loader.u2()); // super class
+        let interfaces = loader.interfaces(cp.clone());
+        let fields = loader.fields(cp.clone()); // fields
+        let methods = loader.fields(cp.clone()); // methods
+        let attributes = loader.attrs(cp.clone()); // methods
+        let const_pool = cp;
+        Class::new(
+            major_version,
+            minor_version,
+            const_pool,
+            flags,
+            this_class,
+            super_class,
+            interfaces,
+            fields,
+            methods,
+            attributes,
+        )
     }
 }
 
