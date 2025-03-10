@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::runtime_data_area::Frame;
 
-mod bytecode_reader;
+pub mod bytecode_reader;
 enum InstructionType {
     NoOperand,
     Branch { offset: i16 },
@@ -33,7 +33,7 @@ impl InstructionOp for InstructionType {
 }
 
 #[rustfmt::skip]
-enum Instruction {
+pub enum Instruction {
     Nop,
     AconstNull,
     Iconst0, Iconst1, Iconst2, Iconst3, Iconst4, Iconst5, IconstM1,
@@ -966,11 +966,10 @@ impl Instruction {
     }
 
     fn branch(frame: &mut Frame, offset: usize) {
-        let pc = frame.thread().pc();
+        let pc = frame.thread().unwrap().borrow().pc();
         // if pc + offset < 0 || pc + offset > frame.method().code_len() as i32 {
         //     panic!("branch out of range")
         // }
-        frame.thread().set_pc(pc + offset);
-        todo!()
+        frame.thread().unwrap().borrow_mut().set_pc(pc + offset);
     }
 }
