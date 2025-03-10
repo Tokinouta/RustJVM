@@ -40,12 +40,18 @@ enum Instruction {
     Lconst0, Lconst1, Fconst0, Fconst1, Fconst2, Dconst0, Dconst1, 
     Bipush(i8),
     Sipush(i16),
-    Iload(u8), Iload0, Iload1, Iload2, Iload3,
-    Lload(u8), Lload0, Lload1, Lload2, Lload3,
-    Fload(u8), Fload0, Fload1, Fload2, Fload3,
-    Dload(u8), Dload0, Dload1, Dload2, Dload3,
-    Aload(u8), Aload0, Aload1, Aload2, Aload3,
+    Iload(u16), Iload0, Iload1, Iload2, Iload3,
+    Lload(u16), Lload0, Lload1, Lload2, Lload3,
+    Fload(u16), Fload0, Fload1, Fload2, Fload3,
+    Dload(u16), Dload0, Dload1, Dload2, Dload3,
+    Aload(u16), Aload0, Aload1, Aload2, Aload3,
     Iaload, Laload, Faload, Daload, Aaload,
+    Istore(u16), Istore0, Istore1, Istore2, Istore3,
+    Lstore(u16), Lstore0, Lstore1, Lstore2, Lstore3,
+    Fstore(u16), Fstore0, Fstore1, Fstore2, Fstore3,
+    Dstore(u16), Dstore0, Dstore1, Dstore2, Dstore3,
+    Astore(u16), Astore0, Astore1, Astore2, Astore3,
+    Iastore, Lastore, Fastore, Dastore, Aastore,
     Pop, Pop2, Dup, DupX1, DupX2, Dup2, Dup2X1, Dup2X2,
     Swap,
     Iadd, Ladd, Fadd, Dadd, 
@@ -56,7 +62,7 @@ enum Instruction {
     Irem, Lrem, Frem, Drem,
     Ishl, Lshl, Ishr, Lshr, Iushr, Lushr,
     Iand, Land, Ior, Lor, IXor, Lxor,
-    Iinc(u8, i8),
+    Iinc(u16, i32),
     I2l, I2f, I2d,
     L2i, L2f, L2d,
     F2i, F2l, F2d,
@@ -68,7 +74,8 @@ enum Instruction {
     IfEq(i16), IfNe(i16), IfLt(i16), IfLe(i16), IfGt(i16), IfGe(i16),
     IficmpEq(i16), IficmpNe(i16), IficmpLt(i16), IficmpLe(i16), IficmpGt(i16), IficmpGe(i16),
     IfacmpEq(i16), IfacmpNe(i16),
-    Goto(i16),
+    IfNull(i16), IfNonNull(i16),
+    Goto(i16), GotoW(i32),
     TableSwitch {
         default_offset: i32,
         low: i32,
@@ -80,6 +87,7 @@ enum Instruction {
         npairs: i32,
         match_offsets: Vec<i32>,
     },
+    Wide(Box<Instruction>),
     Return,
     GetStatic,
     PutStatic,
@@ -108,36 +116,66 @@ impl Instruction {
             Self::Dconst1 => {}
             Self::Bipush(ref mut val) => *val = reader.read_i8(),
             Self::Sipush(ref mut val) => *val = reader.read_i16(),
-            Self::Iload(ref mut index) => *index = reader.read_u8(),
+            Self::Iload(ref mut index) => *index = reader.read_u8() as u16,
             Self::Iload0 => {}
             Self::Iload1 => {}
             Self::Iload2 => {}
             Self::Iload3 => {}
-            Self::Lload(ref mut index) => *index = reader.read_u8(),
+            Self::Lload(ref mut index) => *index = reader.read_u8() as u16,
             Self::Lload0 => {}
             Self::Lload1 => {}
             Self::Lload2 => {}
             Self::Lload3 => {}
-            Self::Fload(ref mut index) => *index = reader.read_u8(),
+            Self::Fload(ref mut index) => *index = reader.read_u8() as u16,
             Self::Fload0 => {}
             Self::Fload1 => {}
             Self::Fload2 => {}
             Self::Fload3 => {}
-            Self::Dload(ref mut index) => *index = reader.read_u8(),
+            Self::Dload(ref mut index) => *index = reader.read_u8() as u16,
             Self::Dload0 => {}
             Self::Dload1 => {}
             Self::Dload2 => {}
             Self::Dload3 => {}
-            Self::Aload(ref mut index) => *index = reader.read_u8(),
+            Self::Aload(ref mut index) => *index = reader.read_u8() as u16,
             Self::Aload0 => {}
             Self::Aload1 => {}
             Self::Aload2 => {}
             Self::Aload3 => {}
-            Self::Iaload => todo!(),
-            Self::Laload => todo!(),
-            Self::Faload => todo!(),
-            Self::Daload => todo!(),
-            Self::Aaload => todo!(),
+            Self::Iaload => {},
+            Self::Laload => {},
+            Self::Faload => {},
+            Self::Daload => {},
+            Self::Aaload => {},
+            Self::Istore(ref mut index) => *index = reader.read_u8() as u16,
+            Self::Istore0 => {}
+            Self::Istore1 => {}
+            Self::Istore2 => {}
+            Self::Istore3 => {}
+            Self::Lstore(ref mut index) => *index = reader.read_u8() as u16,
+            Self::Lstore0 => {}
+            Self::Lstore1 => {}
+            Self::Lstore2 => {}
+            Self::Lstore3 => {}
+            Self::Fstore(ref mut index) => *index = reader.read_u8() as u16,
+            Self::Fstore0 => {}
+            Self::Fstore1 => {}
+            Self::Fstore2 => {}
+            Self::Fstore3 => {}
+            Self::Dstore(ref mut index) => *index = reader.read_u8() as u16,
+            Self::Dstore0 => {}
+            Self::Dstore1 => {}
+            Self::Dstore2 => {}
+            Self::Dstore3 => {}
+            Self::Astore(ref mut index) => *index = reader.read_u8() as u16,
+            Self::Astore0 => {}
+            Self::Astore1 => {}
+            Self::Astore2 => {}
+            Self::Astore3 => {}
+            Self::Iastore => {},
+            Self::Lastore => {},
+            Self::Fastore => {},
+            Self::Dastore => {},
+            Self::Aastore => {},
             Self::Pop => {}
             Self::Pop2 => {}
             Self::Dup => {}
@@ -184,8 +222,8 @@ impl Instruction {
             Self::IXor => {}
             Self::Lxor => {}
             Self::Iinc(ref mut index, ref mut const_num) => {
-                *index = reader.read_u8();
-                *const_num = reader.read_i8();
+                *index = reader.read_u8() as u16;
+                *const_num = reader.read_i8() as i32;
             }
             Self::I2l => {}
             Self::I2f => {}
@@ -218,7 +256,10 @@ impl Instruction {
             Self::IficmpLe(ref mut offset) => *offset = reader.read_i16(),
             Self::IfacmpEq(ref mut offset) => *offset = reader.read_i16(),
             Self::IfacmpNe(ref mut offset) => *offset = reader.read_i16(),
+            Self::IfNull(ref mut offset) => *offset = reader.read_i16(),
+            Self::IfNonNull(ref mut offset) => *offset = reader.read_i16(),
             Self::Goto(ref mut offset) => *offset = reader.read_i16(),
+            Self::GotoW(ref mut offset) => *offset = reader.read_i32(),
             Self::TableSwitch {
                 default_offset,
                 low,
@@ -250,6 +291,28 @@ impl Instruction {
                     let offset = reader.read_i32();
                     match_offsets.push(offset);
                 }
+            }
+            Self::Wide(instruction) => {
+                let opcode = reader.read_u8();
+                match opcode {
+                    0x15 => *instruction = Box::new(Self::Iload(reader.read_u16())),
+                    0x16 => *instruction = Box::new(Self::Lload(reader.read_u16())),
+                    0x17 => *instruction = Box::new(Self::Fload(reader.read_u16())),
+                    0x18 => *instruction = Box::new(Self::Dload(reader.read_u16())),
+                    0x19 => *instruction = Box::new(Self::Aload(reader.read_u16())),
+                    0x36 => *instruction = Box::new(Self::Istore(reader.read_u16())),
+                    0x37 => *instruction = Box::new(Self::Lstore(reader.read_u16())),
+                    0x38 => *instruction = Box::new(Self::Fstore(reader.read_u16())),
+                    0x39 => *instruction = Box::new(Self::Dstore(reader.read_u16())),
+                    0x3a => *instruction = Box::new(Self::Astore(reader.read_u16())),
+                    0x84 => {
+                        let index = reader.read_u16();
+                        let const_num = reader.read_i16() as i32;
+                        *instruction = Box::new(Self::Iinc(index, const_num));
+                    }
+                    _ => panic!("unsupported opcode: {}", opcode),
+                }
+                instruction.fetch_operands(reader);
             }
             Self::Return => {}
             Self::GetStatic => {}
@@ -309,6 +372,36 @@ impl Instruction {
             Self::Faload => todo!(),
             Self::Daload => todo!(),
             Self::Aaload => todo!(),
+            Self::Istore(index) => Self::istore(frame, *index),
+            Self::Istore0 => Self::istore(frame, 0),
+            Self::Istore1 => Self::istore(frame, 1),
+            Self::Istore2 => Self::istore(frame, 2),
+            Self::Istore3 => Self::istore(frame, 3),
+            Self::Lstore(index) => Self::lstore(frame, *index),
+            Self::Lstore0 => Self::lstore(frame, 0),
+            Self::Lstore1 => Self::lstore(frame, 1),
+            Self::Lstore2 => Self::lstore(frame, 2),
+            Self::Lstore3 => Self::lstore(frame, 3),
+            Self::Fstore(index) => Self::fstore(frame, *index),
+            Self::Fstore0 => Self::fstore(frame, 0),
+            Self::Fstore1 => Self::fstore(frame, 1),
+            Self::Fstore2 => Self::fstore(frame, 2),
+            Self::Fstore3 => Self::fstore(frame, 3),
+            Self::Dstore(index) => Self::dstore(frame, *index),
+            Self::Dstore0 => Self::dstore(frame, 0),
+            Self::Dstore1 => Self::dstore(frame, 1),
+            Self::Dstore2 => Self::dstore(frame, 2),
+            Self::Dstore3 => Self::dstore(frame, 3),
+            Self::Astore(index) => Self::astore(frame, *index),
+            Self::Astore0 => Self::astore(frame, 0),
+            Self::Astore1 => Self::astore(frame, 1),
+            Self::Astore2 => Self::astore(frame, 2),
+            Self::Astore3 => Self::astore(frame, 3),
+            Self::Iastore => todo!(),
+            Self::Lastore => todo!(),
+            Self::Fastore => todo!(),
+            Self::Dastore => todo!(),
+            Self::Aastore => todo!(),
             Self::Pop => {
                 frame.operand_stack.pop_slot();
             }
@@ -579,7 +672,7 @@ impl Instruction {
                 let val = frame.local_vars.get_int(*index as usize);
                 frame
                     .local_vars
-                    .set_int(*index as usize, val + (*const_num as i32));
+                    .set_int(*index as usize, val + *const_num);
             }
             Self::I2l => {
                 let val = frame.operand_stack.pop_int();
@@ -648,96 +741,109 @@ impl Instruction {
             Self::IfEq(offset) => {
                 let val = frame.operand_stack.pop_int();
                 if val == 0 {
-                    Self::branch(frame, *offset);
+                    Self::branch(frame, *offset as usize);
                 }
             }
             Self::IfNe(offset) => {
                 let val = frame.operand_stack.pop_int();
                 if val != 0 {
-                    Self::branch(frame, *offset);
+                    Self::branch(frame, *offset as usize);
                 }
             }
             Self::IfLt(offset) => {
                 let val = frame.operand_stack.pop_int();
                 if val < 0 {
-                    Self::branch(frame, *offset);
+                    Self::branch(frame, *offset as usize);
                 }
             }
             Self::IfLe(offset) => {
                 let val = frame.operand_stack.pop_int();
                 if val <= 0 {
-                    Self::branch(frame, *offset);
+                    Self::branch(frame, *offset as usize);
                 }
             }
             Self::IfGt(offset) => {
                 let val = frame.operand_stack.pop_int();
                 if val > 0 {
-                    Self::branch(frame, *offset);
+                    Self::branch(frame, *offset as usize);
                 }
             }
             Self::IfGe(offset) => {
                 let val = frame.operand_stack.pop_int();
                 if val >= 0 {
-                    Self::branch(frame, *offset);
+                    Self::branch(frame, *offset as usize);
                 }
             }
             Self::IficmpEq(offset) => {
                 let val2 = frame.operand_stack.pop_int();
                 let val1 = frame.operand_stack.pop_int();
                 if val1 == val2 {
-                    Self::branch(frame, *offset);
+                    Self::branch(frame, *offset as usize);
                 }
             }
             Self::IficmpNe(offset) => {
                 let val2 = frame.operand_stack.pop_int();
                 let val1 = frame.operand_stack.pop_int();
                 if val1 != val2 {
-                    Self::branch(frame, *offset);
+                    Self::branch(frame, *offset as usize);
                 }
             }
             Self::IficmpLt(offset) => {
                 let val2 = frame.operand_stack.pop_int();
                 let val1 = frame.operand_stack.pop_int();
                 if val1 < val2 {
-                    Self::branch(frame, *offset);
+                    Self::branch(frame, *offset as usize);
                 }
             }
             Self::IficmpGt(offset) => {
                 let val2 = frame.operand_stack.pop_int();
                 let val1 = frame.operand_stack.pop_int();
                 if val1 > val2 {
-                    Self::branch(frame, *offset);
+                    Self::branch(frame, *offset as usize);
                 }
             }
             Self::IficmpLe(offset) => {
                 let val2 = frame.operand_stack.pop_int();
                 let val1 = frame.operand_stack.pop_int();
                 if val1 <= val2 {
-                    Self::branch(frame, *offset);
+                    Self::branch(frame, *offset as usize);
                 }
             }
             Self::IficmpGe(offset) => {
                 let val2 = frame.operand_stack.pop_int();
                 let val1 = frame.operand_stack.pop_int();
                 if val1 >= val2 {
-                    Self::branch(frame, *offset);
+                    Self::branch(frame, *offset as usize);
                 }
             }
             Self::IfacmpEq(offset) => {
                 let val2 = frame.operand_stack.pop_ref();
                 let val1 = frame.operand_stack.pop_ref();
                 if val1 == val2 {
-                    Self::branch(frame, *offset);
+                    Self::branch(frame, *offset as usize);
                 }
             }
             Self::IfacmpNe(offset) => {
                 let val2 = frame.operand_stack.pop_ref();
                 let val1 = frame.operand_stack.pop_ref();
                 if val1 != val2 {
-                    Self::branch(frame, *offset);
+                    Self::branch(frame, *offset as usize);
                 }
             }
-            Self::Goto(offset) => Self::branch(frame, *offset),
+            Self::IfNull(offset) => {
+                let val = frame.operand_stack.pop_ref();
+                if val.is_none() {
+                    Self::branch(frame, *offset as usize);
+                }
+            }
+            Self::IfNonNull(offset) => {
+                let val = frame.operand_stack.pop_ref();
+                if val.is_some() {
+                    Self::branch(frame, *offset as usize);
+                }
+            }
+            Self::Goto(offset) => Self::branch(frame, *offset as usize),
+            Self::GotoW(offset) => Self::branch(frame, *offset as usize),
             Self::TableSwitch {
                 default_offset,
                 low,
@@ -747,9 +853,9 @@ impl Instruction {
                 let index = frame.operand_stack.pop_int();
                 if index >= *low && index <= *high {
                     let offset = offsets[index as usize - *low as usize];
-                    Self::branch(frame, offset as i16);
+                    Self::branch(frame, offset as usize);
                 } else {
-                    Self::branch(frame, *default_offset as i16);
+                    Self::branch(frame, *default_offset as usize);
                 }
             }
             Self::LookupSwitch {
@@ -761,11 +867,12 @@ impl Instruction {
                 for i in 0..*npairs {
                     if match_offsets[i as usize * 2] == index {
                         let offset = match_offsets[i as usize * 2 + 1];
-                        Self::branch(frame, offset as i16);
+                        Self::branch(frame, offset as usize);
                     }
                 }
-                Self::branch(frame, *default_offset as i16);
+                Self::branch(frame, *default_offset as usize);
             }
+            Self::Wide(instruction) => instruction.execute(frame),
             Self::Return => todo!(),
             Self::GetStatic => todo!(),
             Self::PutStatic => todo!(),
@@ -774,29 +881,54 @@ impl Instruction {
         }
     }
 
-    fn iload(frame: &mut Frame, index: u8) {
+    fn iload(frame: &mut Frame, index: u16) {
         let val = frame.local_vars.get_int(index as usize);
         frame.operand_stack.push_int(val);
     }
 
-    fn lload(frame: &mut Frame, index: u8) {
+    fn lload(frame: &mut Frame, index: u16) {
         let val = frame.local_vars.get_long(index as usize);
         frame.operand_stack.push_long(val);
     }
 
-    fn fload(frame: &mut Frame, index: u8) {
+    fn fload(frame: &mut Frame, index: u16) {
         let val = frame.local_vars.get_float(index as usize);
         frame.operand_stack.push_float(val);
     }
 
-    fn dload(frame: &mut Frame, index: u8) {
+    fn dload(frame: &mut Frame, index: u16) {
         let val = frame.local_vars.get_double(index as usize);
         frame.operand_stack.push_double(val);
     }
 
-    fn aload(frame: &mut Frame, index: u8) {
+    fn aload(frame: &mut Frame, index: u16) {
         let val = frame.local_vars.get_ref(index as usize);
         frame.operand_stack.push_ref(val);
+    }
+
+    fn istore(frame: &mut Frame, index: u16) {
+        let val = frame.operand_stack.pop_int();
+        frame.local_vars.set_int(index as usize, val);
+    }
+
+    fn lstore(frame: &mut Frame, index: u16) {
+        let val = frame.operand_stack.pop_long();
+        frame.local_vars.set_long(index as usize, val);
+    }
+
+    fn fstore(frame: &mut Frame, index: u16) {
+        let val = frame.operand_stack.pop_float();
+        frame.local_vars.set_float(index as usize, val);
+    }
+
+    fn dstore(frame: &mut Frame, index: u16) {
+        let val = frame.operand_stack.pop_double();
+        frame.local_vars.set_double(index as usize, val);
+    }
+
+    fn astore(frame: &mut Frame, index: u16) {
+        let val = frame.operand_stack.pop_ref();
+        frame.local_vars.set_ref(index as usize, val);
     }
 
     fn fcmp(frame: &mut Frame, gflag: bool) {
@@ -833,12 +965,12 @@ impl Instruction {
         frame.operand_stack.push_int(result);
     }
 
-    fn branch(frame: &mut Frame, offset: i16) {
+    fn branch(frame: &mut Frame, offset: usize) {
         let pc = frame.thread().pc();
         // if pc + offset < 0 || pc + offset > frame.method().code_len() as i32 {
         //     panic!("branch out of range")
         // }
-        frame.thread().set_pc(pc + offset as usize);
+        frame.thread().set_pc(pc + offset);
         todo!()
     }
 }
