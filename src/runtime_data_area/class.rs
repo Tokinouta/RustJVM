@@ -6,6 +6,8 @@ use std::{
 
 // use crate::classfile::ConstPool;
 
+use crate::classfile::Const;
+
 use super::Slot;
 
 // 定义类、字段和方法的访问标志常量
@@ -281,75 +283,147 @@ impl Method {
 }
 
 #[derive(Clone)]
+struct SymRef {
+    cp: Weak<RefCell<ConstantPool>>,
+    class_name: String,
+    class: Weak<RefCell<Class>>,
+}
+
+#[derive(Clone)]
 pub enum Constant {
-    Utf8(String), // 标签值 1
-    Integer(i32), // 标签值 3
-    Float(f32),   // 标签值 4
-    Long(i64),    // 标签值 5
-    Double(f64),  // 标签值 6
-    Class {
-        name_index: u16,
-    }, // 标签值 7
-    String {
-        string_index: u16,
-    }, // 标签值 8
+    Utf8(String),
+    Integer(i32),
+    Float(f32),
+    Long(i64),
+    Double(f64),
+    Class(SymRef),
+    String(String),
     FieldRef {
         class_index: u16,
         name_and_type_index: u16,
-    }, // 标签值 9
+    },
     MethodRef {
         class_index: u16,
         name_and_type_index: u16,
-    }, // 标签值 10
+    },
     InterfaceMethodRef {
         class_index: u16,
         name_and_type_index: u16,
-    }, // 标签值 11
+    },
     NameAndType {
         name_index: u16,
         descriptor_index: u16,
-    }, // 标签值 12
+    },
     MethodHandle {
         reference_kind: u8,
         reference_index: u16,
-    }, // 标签值 15
+    },
     MethodType {
         descriptor_index: u16,
-    }, // 标签值 16
+    },
     Dynamic {
         bootstrap_method_attr_index: u16,
         name_and_type_index: u16,
-    }, // 标签值 17
+    },
     InvokeDynamic {
         bootstrap_method_attr_index: u16,
         name_and_type_index: u16,
-    }, // 标签值 18
+    },
     Module {
         name_index: u16,
-    }, // 标签值 19
+    },
     Package {
         name_index: u16,
-    }, // 标签值 20
+    },
 }
 
+#[derive(Clone)]
 struct ConstantPool {
     class: Weak<RefCell<Class>>,
     consts: Vec<Option<Constant>>,
 }
 
 impl ConstantPool {
+    // TODO: It needs an implementation that preallocates all the constant pool slots.
     pub fn new(
         class: Rc<RefCell<Class>>,
         classfile_constants: &crate::classfile::ConstPool,
     ) -> Self {
-        let mut constant_pool = Self {
+        let mut constant_pool = Rc::new(RefCell::new(Self {
             class: Rc::downgrade(&class),
             consts: vec![],
-        };
-        for constant in classfile_constants {
-            constant_pool.consts.push(Some(constant.get_constant()))
+        }));
+        for cf_const in classfile_constants {
+            match cf_const {
+                Const::Utf8(s) => {
+                    constant_pool.borrow_mut().consts.push(Some(Constant::Utf8(s.clone())));
+                }
+                Const::Integer(i) => {
+                    constant_pool.borrow_mut().consts.push(Some(Constant::Integer(*i)));
+                }
+                Const::Float(f) => {
+                    constant_pool.borrow_mut().consts.push(Some(Constant::Float(*f)));
+                }
+                Const::Long(l) => {
+                    constant_pool.borrow_mut().consts.push(Some(Constant::Long(*l)));
+                    constant_pool.borrow_mut().consts.push(None);
+                }
+                Const::Double(d) => {
+                    constant_pool.borrow_mut().consts.push(Some(Constant::Double(*d)));
+                    constant_pool.borrow_mut().consts.push(None);
+                }
+                Const::Class { cp, name_index } => {
+                    constant_pool.borrow_mut().consts.push(Some(Constant::Class(SymRef {
+                        cp: Rc::downgrade(&constant_pool),
+                        class_name: cp.upgrade().unwrap().borrow().resolve(*name_index),
+                        class: Rc::downgrade(&class),
+                    })));
+                }
+                Const::String { cp, string_index } => todo!(),
+                Const::FieldRef {
+                    cp,
+                    class_index,
+                    name_and_type_index,
+                } => todo!(),
+                Const::MethodRef {
+                    cp,
+                    class_index,
+                    name_and_type_index,
+                } => todo!(),
+                Const::InterfaceMethodRef {
+                    cp,
+                    class_index,
+                    name_and_type_index,
+                } => todo!(),
+                Const::NameAndType {
+                    cp,
+                    name_index,
+                    descriptor_index,
+                } => todo!(),
+                Const::MethodHandle {
+                    cp,
+                    reference_kind,
+                    reference_index,
+                } => todo!(),
+                Const::MethodType {
+                    cp,
+                    descriptor_index,
+                } => todo!(),
+                Const::Dynamic {
+                    cp,
+                    bootstrap_method_attr_index,
+                    name_and_type_index,
+                } => todo!(),
+                Const::InvokeDynamic {
+                    cp,
+                    bootstrap_method_attr_index,
+                    name_and_type_index,
+                } => todo!(),
+                Const::Module { cp, name_index } => todo!(),
+                Const::Package { cp, name_index } => todo!(),
+            }
         }
-        constant_pool
+        constant_pool.clone().into_inner()
     }
 
     pub fn get(&self, index: usize) -> &Constant {

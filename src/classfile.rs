@@ -3,22 +3,85 @@ use std::{
     rc::{Rc, Weak},
 };
 
-use crate::{attribute::Attribute, loader::Loader, runtime_data_area::class::Constant};
+use crate::{attribute::Attribute, loader::Loader};
 
-pub struct Const {
-    cp: Weak<RefCell<ConstPool>>,
-    constant: Constant,
+// pub struct Const {
+//     cp: Weak<RefCell<ConstPool>>,
+//     constant: Constant,
+// }
+
+pub enum Const {
+    Utf8(String), // 标签值 1
+    Integer(i32), // 标签值 3
+    Float(f32),   // 标签值 4
+    Long(i64),    // 标签值 5
+    Double(f64),  // 标签值 6
+    Class {
+        cp: Weak<RefCell<ConstPool>>,
+        name_index: u16,
+    }, // 标签值 7
+    String {
+        cp: Weak<RefCell<ConstPool>>,
+        string_index: u16,
+    }, // 标签值 8
+    FieldRef {
+        cp: Weak<RefCell<ConstPool>>,
+        class_index: u16,
+        name_and_type_index: u16,
+    }, // 标签值 9
+    MethodRef {
+        cp: Weak<RefCell<ConstPool>>,
+        class_index: u16,
+        name_and_type_index: u16,
+    }, // 标签值 10
+    InterfaceMethodRef {
+        cp: Weak<RefCell<ConstPool>>,
+        class_index: u16,
+        name_and_type_index: u16,
+    }, // 标签值 11
+    NameAndType {
+        cp: Weak<RefCell<ConstPool>>,
+        name_index: u16,
+        descriptor_index: u16,
+    }, // 标签值 12
+    MethodHandle {
+        cp: Weak<RefCell<ConstPool>>,
+        reference_kind: u8,
+        reference_index: u16,
+    }, // 标签值 15
+    MethodType {
+        cp: Weak<RefCell<ConstPool>>,
+        descriptor_index: u16,
+    }, // 标签值 16
+    Dynamic {
+        cp: Weak<RefCell<ConstPool>>,
+        bootstrap_method_attr_index: u16,
+        name_and_type_index: u16,
+    }, // 标签值 17
+    InvokeDynamic {
+        cp: Weak<RefCell<ConstPool>>,
+        bootstrap_method_attr_index: u16,
+        name_and_type_index: u16,
+    }, // 标签值 18
+    Module {
+        cp: Weak<RefCell<ConstPool>>,
+        name_index: u16,
+    }, // 标签值 19
+    Package {
+        cp: Weak<RefCell<ConstPool>>,
+        name_index: u16,
+    }, // 标签值 20
 }
 
-impl Const {
-    pub fn new(cp: Weak<RefCell<ConstPool>>, constant: Constant) -> Self {
-        Self { cp, constant }
-    }
+// impl Const {
+//     pub fn new(cp: Weak<RefCell<ConstPool>>, constant: Constant) -> Self {
+//         Self { cp, constant }
+//     }
 
-    pub fn get_constant(&self) -> Constant {
-        self.constant.clone()
-    }
-}
+//     pub fn get_constant(&self) -> Constant {
+//         self.constant.clone()
+//     }
+// }
 
 pub struct ConstPool(Vec<Const>);
 
@@ -27,10 +90,14 @@ impl ConstPool {
         Self(vec![])
     }
 
+    pub fn size(&self) -> usize {
+        self.0.len()
+    }
+
     pub fn resolve(&self, index: u16) -> String {
         let index = (index - 1) as usize;
-        match &self.0[index].constant {
-            Constant::Utf8(s) => s.clone(),
+        match &self.0[index] {
+            Const::Utf8(s) => s.clone(),
             _ => String::from(""),
         }
     }
@@ -40,21 +107,26 @@ impl ConstPool {
     }
 }
 
-impl IntoIterator for ConstPool {
+impl Iterator for ConstPool {
     type Item = Const;
-    type IntoIter = std::vec::IntoIter<Self::Item>;
 
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.0.is_empty() {
+            None
+        } else {
+            Some(self.0.remove(0))
+        }
     }
 }
 
-impl<'a> IntoIterator for &'a ConstPool {
+impl<'a> Iterator for &'a ConstPool {
     type Item = &'a Const;
-    type IntoIter = std::slice::Iter<'a, Const>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.iter()
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.0.is_empty() {
+            None
+        } else {
+            Some(&self.0[0])
+        }
     }
 }
 

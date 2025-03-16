@@ -3,7 +3,7 @@ use std::{cell::RefCell, fs::File, io::Read, rc::Rc};
 use crate::{
     attribute::{Attribute, ExceptionTable, LineNumberTableEntry, LocalVariableTableEntry},
     classfile::{ClassFile, Const, ConstPool, Field},
-    runtime_data_area::class::Constant
+    runtime_data_area::class::Constant,
 };
 
 pub struct Loader {
@@ -50,57 +50,69 @@ impl Loader {
                 0x01 => {
                     // UTF8 string literal, 2 bytes length + data
                     let size = self.u2() as usize;
-                    Constant::Utf8(String::from_utf8(self.bytes(size)).unwrap())
+                    Const::Utf8(String::from_utf8(self.bytes(size)).unwrap())
                 }
-                0x03 => Constant::Integer(self.u4() as i32),
-                0x04 => Constant::Float(f32::from_bits(self.u4())),
-                0x05 => Constant::Long(self.u8() as i64),
-                0x06 => Constant::Double(f64::from_bits(self.u8())),
+                0x03 => Const::Integer(self.u4() as i32),
+                0x04 => Const::Float(f32::from_bits(self.u4())),
+                0x05 => Const::Long(self.u8() as i64),
+                0x06 => Const::Double(f64::from_bits(self.u8())),
                 0x07 => {
-                    Constant::Class {
+                    Const::Class {
+                        cp: Rc::downgrade(&const_pool),
                         name_index: self.u2(), // Class index
                     }
                 }
                 0x08 => {
-                    Constant::String {
+                    Const::String {
+                        cp: Rc::downgrade(&const_pool),
                         string_index: self.u2(), // String reference index
                     }
                 }
-                0x09 => Constant::FieldRef {
+                0x09 => Const::FieldRef {
+                    cp: Rc::downgrade(&const_pool),
                     class_index: self.u2(),
                     name_and_type_index: self.u2(),
                 },
-                0x0a => Constant::MethodRef {
+                0x0a => Const::MethodRef {
+                    cp: Rc::downgrade(&const_pool),
                     class_index: self.u2(),
                     name_and_type_index: self.u2(),
                 },
-                0x0b => Constant::InterfaceMethodRef {
+                0x0b => Const::InterfaceMethodRef {
+                    cp: Rc::downgrade(&const_pool),
                     class_index: self.u2(),
                     name_and_type_index: self.u2(),
                 },
-                0x0c => Constant::NameAndType {
+                0x0c => Const::NameAndType {
+                    cp: Rc::downgrade(&const_pool),
                     name_index: self.u2(),
                     descriptor_index: self.u2(),
                 },
-                0x0f => Constant::MethodHandle {
+                0x0f => Const::MethodHandle {
+                    cp: Rc::downgrade(&const_pool),
                     reference_kind: self.u1(),
                     reference_index: self.u2(),
                 },
-                0x10 => Constant::MethodType {
+                0x10 => Const::MethodType {
+                    cp: Rc::downgrade(&const_pool),
                     descriptor_index: self.u2(),
                 },
-                0x11 => Constant::Dynamic {
+                0x11 => Const::Dynamic {
+                    cp: Rc::downgrade(&const_pool),
                     bootstrap_method_attr_index: self.u2(),
                     name_and_type_index: self.u2(),
                 },
-                0x12 => Constant::InvokeDynamic {
+                0x12 => Const::InvokeDynamic {
+                    cp: Rc::downgrade(&const_pool),
                     bootstrap_method_attr_index: self.u2(),
                     name_and_type_index: self.u2(),
                 },
-                0x13 => Constant::Module {
+                0x13 => Const::Module {
+                    cp: Rc::downgrade(&const_pool),
                     name_index: self.u2(),
                 },
-                0x14 => Constant::Package {
+                0x14 => Const::Package {
+                    cp: Rc::downgrade(&const_pool),
                     name_index: self.u2(),
                 },
                 _ => {
@@ -108,7 +120,7 @@ impl Loader {
                     continue;
                 }
             };
-            const_pool.borrow_mut().push(Const::new(Rc::downgrade(&const_pool), c));
+            const_pool.borrow_mut().push(c)
         }
     }
 
