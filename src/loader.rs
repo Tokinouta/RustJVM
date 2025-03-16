@@ -2,7 +2,8 @@ use std::{cell::RefCell, fs::File, io::Read, rc::Rc};
 
 use crate::{
     attribute::{Attribute, ExceptionTable, LineNumberTableEntry, LocalVariableTableEntry},
-    classfile::{Class, Const, ConstPool, Field},
+    classfile::{ClassFile, Const, ConstPool, Field},
+    runtime_data_area::class::Constant
 };
 
 pub struct Loader {
@@ -49,69 +50,57 @@ impl Loader {
                 0x01 => {
                     // UTF8 string literal, 2 bytes length + data
                     let size = self.u2() as usize;
-                    Const::Utf8(String::from_utf8(self.bytes(size)).unwrap())
+                    Constant::Utf8(String::from_utf8(self.bytes(size)).unwrap())
                 }
-                0x03 => Const::Integer(self.u4() as i32),
-                0x04 => Const::Float(f32::from_bits(self.u4())),
-                0x05 => Const::Long(self.u8() as i64),
-                0x06 => Const::Double(f64::from_bits(self.u8())),
+                0x03 => Constant::Integer(self.u4() as i32),
+                0x04 => Constant::Float(f32::from_bits(self.u4())),
+                0x05 => Constant::Long(self.u8() as i64),
+                0x06 => Constant::Double(f64::from_bits(self.u8())),
                 0x07 => {
-                    Const::Class {
-                        cp: const_pool.clone(),
+                    Constant::Class {
                         name_index: self.u2(), // Class index
                     }
                 }
                 0x08 => {
-                    Const::String {
-                        cp: const_pool.clone(),
+                    Constant::String {
                         string_index: self.u2(), // String reference index
                     }
                 }
-                0x09 => Const::FieldRef {
-                    cp: const_pool.clone(),
+                0x09 => Constant::FieldRef {
                     class_index: self.u2(),
                     name_and_type_index: self.u2(),
                 },
-                0x0a => Const::MethodRef {
-                    cp: const_pool.clone(),
+                0x0a => Constant::MethodRef {
                     class_index: self.u2(),
                     name_and_type_index: self.u2(),
                 },
-                0x0b => Const::InterfaceMethodRef {
-                    cp: const_pool.clone(),
+                0x0b => Constant::InterfaceMethodRef {
                     class_index: self.u2(),
                     name_and_type_index: self.u2(),
                 },
-                0x0c => Const::NameAndType {
-                    cp: const_pool.clone(),
+                0x0c => Constant::NameAndType {
                     name_index: self.u2(),
                     descriptor_index: self.u2(),
                 },
-                0x0f => Const::MethodHandle {
-                    cp: const_pool.clone(),
+                0x0f => Constant::MethodHandle {
                     reference_kind: self.u1(),
                     reference_index: self.u2(),
                 },
-                0x10 => Const::MethodType {
-                    cp: const_pool.clone(),
+                0x10 => Constant::MethodType {
                     descriptor_index: self.u2(),
                 },
-                0x11 => Const::Dynamic {
-                    cp: const_pool.clone(),
+                0x11 => Constant::Dynamic {
                     bootstrap_method_attr_index: self.u2(),
                     name_and_type_index: self.u2(),
                 },
-                0x12 => Const::InvokeDynamic {
-                    cp: const_pool.clone(),
+                0x12 => Constant::InvokeDynamic {
                     bootstrap_method_attr_index: self.u2(),
                     name_and_type_index: self.u2(),
                 },
-                0x13 => Const::Module {
-                    cp: const_pool.clone(),
+                0x13 => Constant::Module {
                     name_index: self.u2(),
                 },
-                0x14 => Const::Package {
-                    cp: const_pool.clone(),
+                0x14 => Constant::Package {
                     name_index: self.u2(),
                 },
                 _ => {
@@ -119,7 +108,7 @@ impl Loader {
                     continue;
                 }
             };
-            const_pool.borrow_mut().push(c)
+            const_pool.borrow_mut().push(Const::new(Rc::downgrade(&const_pool), c));
         }
     }
 
@@ -236,15 +225,14 @@ impl Loader {
         return attrs;
     }
 
-    pub fn load(path: String) -> Class {
+    pub fn load(path: String) -> ClassFile {
         let mut loader = Self::new(path);
-        let mut c = Class::default();
         let magic = loader.u4();
         assert_eq!(magic, 0xcafebabe, "Error: Invalid magic number");
         let major_version = loader.u2();
         let minor_version = loader.u2();
 
-        let cp = Rc::new(RefCell::new(ConstPool::default()));
+        let cp = Rc::new(RefCell::new(ConstPool::new()));
         loader.cpinfo(cp.clone()); // const pool info
         let flags = loader.u2(); // access flags
         let this_class = cp.borrow_mut().resolve(loader.u2()); // this class
@@ -254,7 +242,7 @@ impl Loader {
         let methods = loader.fields(cp.clone()); // methods
         let attributes = loader.attrs(cp.clone()); // methods
         let const_pool = cp;
-        Class::new(
+        ClassFile::new(
             major_version,
             minor_version,
             const_pool,

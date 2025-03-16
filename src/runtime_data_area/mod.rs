@@ -3,11 +3,10 @@ use std::{
     rc::{Rc, Weak},
 };
 
-#[derive(PartialEq)]
-pub struct Object {
-    // class: Class,
-    // fields: Vec<Value>,
-}
+use heap::Object;
+
+pub mod heap;
+pub mod class;
 
 #[derive(Clone)]
 pub struct Slot {
@@ -285,8 +284,6 @@ impl Thread {
 }
 
 mod test {
-    use std::os::unix::thread;
-
     use super::*;
 
     #[test]
