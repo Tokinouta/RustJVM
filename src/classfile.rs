@@ -10,6 +10,7 @@ use crate::{attribute::Attribute, loader::Loader};
 //     constant: Constant,
 // }
 
+#[derive(Clone)]
 pub enum Const {
     Utf8(String), // 标签值 1
     Integer(i32), // 标签值 3
@@ -94,7 +95,11 @@ impl ConstPool {
         self.0.len()
     }
 
-    pub fn resolve(&self, index: u16) -> String {
+    pub fn push(&mut self, c: Const) {
+        self.0.push(c);
+    }
+
+    pub fn get_utf8(&self, index: u16) -> String {
         let index = (index - 1) as usize;
         match &self.0[index] {
             Const::Utf8(s) => s.clone(),
@@ -102,8 +107,35 @@ impl ConstPool {
         }
     }
 
-    pub fn push(&mut self, c: Const) {
-        self.0.push(c);
+    pub fn get_class(&self, index: u16) -> String {
+        let index = (index - 1) as usize;
+        match &self.0[index] {
+            Const::Class { cp, name_index } => {
+                let cp = cp.upgrade().unwrap();
+                let cp = cp.borrow();
+                cp.get_utf8(*name_index)
+            }
+            _ => String::from(""),
+        }
+    }
+
+    pub fn get_name_and_type(&self, index: u16) -> (String, String) {
+        let index = (index - 1) as usize;
+        match &self.0[index] {
+            Const::NameAndType {
+                cp,
+                name_index,
+                descriptor_index,
+            } => {
+                let cp = cp.upgrade().unwrap();
+                let cp = cp.borrow();
+                (
+                    cp.get_utf8(*name_index),
+                    cp.get_utf8(*descriptor_index),
+                )
+            }
+            _ => (String::from(""), String::from("")),
+        }
     }
 }
 

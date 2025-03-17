@@ -128,7 +128,7 @@ impl Loader {
         let mut interfaces = vec![];
         let interface_count = self.u2();
         for _ in 0..interface_count {
-            let c = const_pool.borrow().resolve(self.u2());
+            let c = const_pool.borrow().get_utf8(self.u2());
             interfaces.push(c);
         }
         interfaces
@@ -138,8 +138,8 @@ impl Loader {
         let mut fields = vec![];
         let fields_count = self.u2();
         for _ in 0..fields_count {
-            let name = const_pool.borrow().resolve(self.u2());
-            let descriptor = const_pool.borrow().resolve(self.u2());
+            let name = const_pool.borrow().get_utf8(self.u2());
+            let descriptor = const_pool.borrow().get_utf8(self.u2());
             fields.push(Field::new(
                 self.u2(),
                 name,
@@ -154,7 +154,7 @@ impl Loader {
         let mut attrs = vec![];
         let attributes_count = self.u2();
         for _ in 0..attributes_count {
-            let name = const_pool.borrow().resolve(self.u2());
+            let name = const_pool.borrow().get_utf8(self.u2());
             let size = self.u4() as usize;
             // attrs.push(Attribute {
             //     name,
@@ -247,8 +247,8 @@ impl Loader {
         let cp = Rc::new(RefCell::new(ConstPool::new()));
         loader.cpinfo(cp.clone()); // const pool info
         let flags = loader.u2(); // access flags
-        let this_class = cp.borrow_mut().resolve(loader.u2()); // this class
-        let super_class = cp.borrow_mut().resolve(loader.u2()); // super class
+        let this_class = cp.borrow_mut().get_utf8(loader.u2()); // this class
+        let super_class = cp.borrow_mut().get_utf8(loader.u2()); // super class
         let interfaces = loader.interfaces(cp.clone());
         let fields = loader.fields(cp.clone()); // fields
         let methods = loader.fields(cp.clone()); // methods

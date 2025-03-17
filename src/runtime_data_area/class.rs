@@ -103,6 +103,7 @@ impl Class {
     }
 }
 
+#[derive(Clone)]
 struct ClassMember {
     access_flags: u16,
     name: String,
@@ -127,6 +128,7 @@ impl ClassMember {
     }
 }
 
+#[derive(Clone)]
 struct Field {
     info: ClassMember,
 }
@@ -189,6 +191,7 @@ impl Field {
     }
 }
 
+#[derive(Clone)]
 struct Method {
     info: ClassMember,
     max_stack: u16,
@@ -299,16 +302,22 @@ pub enum Constant {
     Class(SymRef),
     String(String),
     FieldRef {
-        class_index: u16,
-        name_and_type_index: u16,
+        sym_ref: SymRef,
+        name: String,
+        descriptor: String,
+        field: Box<Field>,
     },
     MethodRef {
-        class_index: u16,
-        name_and_type_index: u16,
+        sym_ref: SymRef,
+        name: String,
+        descriptor: String,
+        method: Box<Method>,
     },
     InterfaceMethodRef {
-        class_index: u16,
-        name_and_type_index: u16,
+        sym_ref: SymRef,
+        name: String,
+        descriptor: String,
+        method: Box<Method>,
     },
     NameAndType {
         name_index: u16,
@@ -348,7 +357,7 @@ impl ConstantPool {
     pub fn new(
         class: Rc<RefCell<Class>>,
         classfile_constants: &crate::classfile::ConstPool,
-    ) -> Self {
+    ) -> Rc<RefCell<Self>> {
         let mut constant_pool = Rc::new(RefCell::new(Self {
             class: Rc::downgrade(&class),
             consts: vec![],
@@ -356,45 +365,130 @@ impl ConstantPool {
         for cf_const in classfile_constants {
             match cf_const {
                 Const::Utf8(s) => {
-                    constant_pool.borrow_mut().consts.push(Some(Constant::Utf8(s.clone())));
+                    constant_pool
+                        .borrow_mut()
+                        .consts
+                        .push(Some(Constant::Utf8(s.clone())));
                 }
                 Const::Integer(i) => {
-                    constant_pool.borrow_mut().consts.push(Some(Constant::Integer(*i)));
+                    constant_pool
+                        .borrow_mut()
+                        .consts
+                        .push(Some(Constant::Integer(*i)));
                 }
                 Const::Float(f) => {
-                    constant_pool.borrow_mut().consts.push(Some(Constant::Float(*f)));
+                    constant_pool
+                        .borrow_mut()
+                        .consts
+                        .push(Some(Constant::Float(*f)));
                 }
                 Const::Long(l) => {
-                    constant_pool.borrow_mut().consts.push(Some(Constant::Long(*l)));
+                    constant_pool
+                        .borrow_mut()
+                        .consts
+                        .push(Some(Constant::Long(*l)));
                     constant_pool.borrow_mut().consts.push(None);
                 }
                 Const::Double(d) => {
-                    constant_pool.borrow_mut().consts.push(Some(Constant::Double(*d)));
+                    constant_pool
+                        .borrow_mut()
+                        .consts
+                        .push(Some(Constant::Double(*d)));
                     constant_pool.borrow_mut().consts.push(None);
                 }
                 Const::Class { cp, name_index } => {
-                    constant_pool.borrow_mut().consts.push(Some(Constant::Class(SymRef {
-                        cp: Rc::downgrade(&constant_pool),
-                        class_name: cp.upgrade().unwrap().borrow().resolve(*name_index),
-                        class: Rc::downgrade(&class),
-                    })));
+                    constant_pool
+                        .borrow_mut()
+                        .consts
+                        .push(Some(Constant::Class(SymRef {
+                            cp: Rc::downgrade(&constant_pool),
+                            class_name: cp.upgrade().unwrap().borrow().get_utf8(*name_index),
+                            class: Rc::downgrade(&class),
+                        })));
                 }
-                Const::String { cp, string_index } => todo!(),
+                Const::String { cp, string_index } => {
+                    constant_pool
+                        .borrow_mut()
+                        .consts
+                        .push(Some(Constant::String(
+                            cp.upgrade().unwrap().borrow().get_utf8(*string_index),
+                        )));
+                }
                 Const::FieldRef {
                     cp,
                     class_index,
                     name_and_type_index,
-                } => todo!(),
+                } => {
+                    let class_name = cp.upgrade().unwrap().borrow().get_utf8(*class_index);
+                    let (name, descriptor) = cp
+                        .upgrade()
+                        .unwrap()
+                        .borrow()
+                        .get_name_and_type(*name_and_type_index);
+                    constant_pool
+                        .borrow_mut()
+                        .consts
+                        .push(Some(Constant::FieldRef {
+                            sym_ref: SymRef {
+                                cp: Rc::downgrade(&constant_pool),
+                                class_name,
+                                class: Rc::downgrade(&class),
+                            },
+                            name,
+                            descriptor,
+                            field: Box::new(Field::new()),
+                        }));
+                }
                 Const::MethodRef {
                     cp,
                     class_index,
                     name_and_type_index,
-                } => todo!(),
+                } => {
+                    let class_name = cp.upgrade().unwrap().borrow().get_utf8(*class_index);
+                    let (name, descriptor) = cp
+                        .upgrade()
+                        .unwrap()
+                        .borrow()
+                        .get_name_and_type(*name_and_type_index);
+                    constant_pool
+                        .borrow_mut()
+                        .consts
+                        .push(Some(Constant::MethodRef {
+                            sym_ref: SymRef {
+                                cp: Rc::downgrade(&constant_pool),
+                                class_name,
+                                class: Rc::downgrade(&class),
+                            },
+                            name,
+                            descriptor,
+                            method: Box::new(Method::new()),
+                        }));
+                },
                 Const::InterfaceMethodRef {
                     cp,
                     class_index,
                     name_and_type_index,
-                } => todo!(),
+                } => {
+                    let class_name = cp.upgrade().unwrap().borrow().get_utf8(*class_index);
+                    let (name, descriptor) = cp
+                        .upgrade()
+                        .unwrap()
+                        .borrow()
+                        .get_name_and_type(*name_and_type_index);
+                    constant_pool
+                        .borrow_mut()
+                        .consts
+                        .push(Some(Constant::InterfaceMethodRef {
+                            sym_ref: SymRef {
+                                cp: Rc::downgrade(&constant_pool),
+                                class_name,
+                                class: Rc::downgrade(&class),
+                            },
+                            name,
+                            descriptor,
+                            method: Box::new(Method::new()),
+                        }));
+                },
                 Const::NameAndType {
                     cp,
                     name_index,
@@ -423,7 +517,7 @@ impl ConstantPool {
                 Const::Package { cp, name_index } => todo!(),
             }
         }
-        constant_pool.clone().into_inner()
+        constant_pool
     }
 
     pub fn get(&self, index: usize) -> &Constant {
