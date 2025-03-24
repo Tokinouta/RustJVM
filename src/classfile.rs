@@ -1,14 +1,9 @@
 use std::{
-    cell::RefCell,
+    cell::{Ref, RefCell, RefMut},
     rc::{Rc, Weak},
 };
 
-use crate::{attribute::Attribute, loader::Loader};
-
-// pub struct Const {
-//     cp: Weak<RefCell<ConstPool>>,
-//     constant: Constant,
-// }
+use crate::attribute::Attribute;
 
 #[derive(Clone)]
 pub enum Const {
@@ -74,17 +69,8 @@ pub enum Const {
     }, // 标签值 20
 }
 
-// impl Const {
-//     pub fn new(cp: Weak<RefCell<ConstPool>>, constant: Constant) -> Self {
-//         Self { cp, constant }
-//     }
-
-//     pub fn get_constant(&self) -> Constant {
-//         self.constant.clone()
-//     }
-// }
-
-pub struct ConstPool(Vec<Const>);
+// TODO: delete the pub of the member
+pub struct ConstPool(pub Vec<Const>);
 
 impl ConstPool {
     pub fn new() -> Self {
@@ -129,10 +115,7 @@ impl ConstPool {
             } => {
                 let cp = cp.upgrade().unwrap();
                 let cp = cp.borrow();
-                (
-                    cp.get_utf8(*name_index),
-                    cp.get_utf8(*descriptor_index),
-                )
+                (cp.get_utf8(*name_index), cp.get_utf8(*descriptor_index))
             }
             _ => (String::from(""), String::from("")),
         }
@@ -188,20 +171,17 @@ impl Field {
     }
 }
 
-// Attributes contain addition information about fields and classes
-// The most useful is "Code" attribute, which contains actual byte code
-
 pub struct ClassFile {
-    major_version: u16,
-    minor_version: u16,
-    const_pool: Rc<RefCell<ConstPool>>,
-    flags: u16,
-    this_class: String,
-    super_class: String,
-    interfaces: Vec<String>,
-    fields: Vec<Field>,
-    methods: Vec<Field>,
-    attributes: Vec<Attribute>,
+    pub major_version: u16,
+    pub minor_version: u16,
+    pub const_pool: Rc<RefCell<ConstPool>>,
+    pub access_flags: u16,
+    pub this_class: String,
+    pub super_class: String,
+    pub interfaces: Vec<String>,
+    pub fields: Vec<Field>,
+    pub methods: Vec<Field>,
+    pub attributes: Vec<Attribute>,
 }
 
 impl ClassFile {
@@ -209,7 +189,7 @@ impl ClassFile {
         major_version: u16,
         minor_version: u16,
         const_pool: Rc<RefCell<ConstPool>>,
-        flags: u16,
+        access_flags: u16,
         this_class: String,
         super_class: String,
         interfaces: Vec<String>,
@@ -221,7 +201,7 @@ impl ClassFile {
             major_version,
             minor_version,
             const_pool,
-            flags,
+            access_flags,
             this_class,
             super_class,
             interfaces,

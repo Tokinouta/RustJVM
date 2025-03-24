@@ -1,28 +1,27 @@
-use std::{cell::RefCell, fs::File, io::Read, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     attribute::{Attribute, ExceptionTable, LineNumberTableEntry, LocalVariableTableEntry},
     classfile::{ClassFile, Const, ConstPool, Field},
-    runtime_data_area::class::Constant,
 };
 
-pub struct Loader {
-    file: File,
+pub struct ClassFileLoader {
+    data: Vec<u8>,
+    pos: usize, // Add a position field to track the current reading position
 }
 
-impl Loader {
-    fn new(path: String) -> Self {
-        Loader {
-            file: File::open(path).unwrap(),
-        }
+impl ClassFileLoader {
+    fn new(data: Vec<u8>) -> Self {
+        ClassFileLoader { data, pos: 0 }
     }
 
-    fn bytes(&mut self, n: usize) -> Vec<u8> {
-        let mut bytes = vec![0u8; n];
-        match self.file.read_exact(&mut bytes) {
-            Ok(_) => bytes,
-            Err(_) => panic!("Failed to read bytes"),
+    fn bytes(&mut self, n: usize) -> &[u8] {
+        if self.pos + n > self.data.len() {
+            panic!("Failed to read bytes: not enough data");
         }
+        let bytes = &self.data[self.pos..self.pos + n];
+        self.pos += n;
+        bytes
     }
 
     fn u1(&mut self) -> u8 {
@@ -41,7 +40,7 @@ impl Loader {
         u64::from_be_bytes(self.bytes(8).try_into().unwrap())
     }
 
-    fn cpinfo<'a>(&mut self, const_pool: Rc<RefCell<ConstPool>>) {
+    fn cpinfo(&mut self, const_pool: Rc<RefCell<ConstPool>>) {
         let const_pool_count = self.u2();
         // Valid constant pool indices start from 1
         for _ in 1..const_pool_count {
@@ -50,7 +49,7 @@ impl Loader {
                 0x01 => {
                     // UTF8 string literal, 2 bytes length + data
                     let size = self.u2() as usize;
-                    Const::Utf8(String::from_utf8(self.bytes(size)).unwrap())
+                    Const::Utf8(String::from_utf8(self.bytes(size).to_vec()).unwrap())
                 }
                 0x03 => Const::Integer(self.u4() as i32),
                 0x04 => Const::Float(f32::from_bits(self.u4())),
@@ -155,17 +154,13 @@ impl Loader {
         let attributes_count = self.u2();
         for _ in 0..attributes_count {
             let name = const_pool.borrow().get_utf8(self.u2());
-            let size = self.u4() as usize;
-            // attrs.push(Attribute {
-            //     name,
-            //     data: self.bytes(size),
-            // })
+            let _size = self.u4() as usize; // read the size of the attribute, though not used in the construction
             let attr = match name.as_str() {
                 "Code" => {
                     let max_stack = self.u2();
                     let max_locals = self.u2();
                     let code_length = self.u4() as usize;
-                    let code = self.bytes(code_length);
+                    let code = self.bytes(code_length).to_vec();
                     let exception_table_length = self.u2();
                     let mut exception_table = Vec::new();
                     for _ in 0..exception_table_length {
@@ -237,8 +232,8 @@ impl Loader {
         return attrs;
     }
 
-    pub fn load(path: String) -> ClassFile {
-        let mut loader = Self::new(path);
+    pub fn load(data: Vec<u8>) -> ClassFile {
+        let mut loader = Self::new(data);
         let magic = loader.u4();
         assert_eq!(magic, 0xcafebabe, "Error: Invalid magic number");
         let major_version = loader.u2();
@@ -246,7 +241,7 @@ impl Loader {
 
         let cp = Rc::new(RefCell::new(ConstPool::new()));
         loader.cpinfo(cp.clone()); // const pool info
-        let flags = loader.u2(); // access flags
+        let access_flags = loader.u2(); // access flags
         let this_class = cp.borrow_mut().get_utf8(loader.u2()); // this class
         let super_class = cp.borrow_mut().get_utf8(loader.u2()); // super class
         let interfaces = loader.interfaces(cp.clone());
@@ -258,7 +253,7 @@ impl Loader {
             major_version,
             minor_version,
             const_pool,
-            flags,
+            access_flags,
             this_class,
             super_class,
             interfaces,
@@ -271,51 +266,60 @@ impl Loader {
 
 mod tests {
     use super::*;
+    use std::fs::File;
+    use std::io::Read;
+
+    fn read_data(path: &str) -> Vec<u8> {
+        let mut file = File::open(path).expect("Failed to open file");
+        let mut data = Vec::new();
+        file.read_to_end(&mut data).expect("Failed to read file");
+        data
+    }
 
     #[test]
     fn test_loader_bytes() {
-        let path = "test_file.bin"; // 确保这个文件存在于文件系统上并且至少有5个字节长
-        let mut loader = Loader::new(path.to_string());
+        let data = read_data("test_file.bin");
+        let mut loader = ClassFileLoader::new(data);
         let bytes = loader.bytes(5);
         assert_eq!(bytes.len(), 5);
     }
 
     #[test]
     fn test_loader_u1() {
-        let path = "test_file.bin"; // 确保这个文件存在于文件系统上并且至少有一个字节长
-        let mut loader = Loader::new(path.to_string());
+        let data = read_data("test_file.bin");
+        let mut loader = ClassFileLoader::new(data);
         let byte = loader.u1();
         assert!(byte == 0x31);
     }
 
     #[test]
     fn test_loader_u2() {
-        let path = "test_file.bin"; // 确保这个文件存在于文件系统上并且至少有两个字节长
-        let mut loader = Loader::new(path.to_string());
+        let data = read_data("test_file.bin");
+        let mut loader = ClassFileLoader::new(data);
         let word = loader.u2();
         assert!(word == 0x3132);
     }
 
     #[test]
     fn test_loader_u4() {
-        let path = "test_file.bin"; // 确保这个文件存在于文件系统上并且至少有四个字节长
-        let mut loader = Loader::new(path.to_string());
+        let data = read_data("test_file.bin");
+        let mut loader = ClassFileLoader::new(data);
         let dword = loader.u4();
         assert!(dword == 0x31323334);
     }
 
     #[test]
     fn test_loader_u8() {
-        let path = "test_file.bin"; // 确保这个文件存在于文件系统上并且至少有八个字节长
-        let mut loader = Loader::new(path.to_string());
+        let data = read_data("test_file.bin");
+        let mut loader = ClassFileLoader::new(data);
         let qword = loader.u8();
         assert!(qword == 0x3132333435363738);
     }
 
     #[test]
     fn test_loader_sequential_read() {
-        let path = "test_file.bin"; // 确保这个文件存在于文件系统上并且至少有八个字节长
-        let mut loader = Loader::new(path.to_string());
+        let data = read_data("test_file.bin");
+        let mut loader = ClassFileLoader::new(data);
         let dword = loader.u4();
         // print dword as hexadecimal
         println!("dword: {:x}", dword);

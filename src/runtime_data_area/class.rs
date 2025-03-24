@@ -4,11 +4,8 @@ use std::{
     rc::{Rc, Weak},
 };
 
-// use crate::classfile::ConstPool;
-
-use crate::classfile::Const;
-
-use super::Slot;
+use super::{class_loader::ClassLoader, Slot};
+use crate::classfile::{ClassFile, Const};
 
 // 定义类、字段和方法的访问标志常量
 const ACC_PUBLIC: u16 = 0x0001; // class field method
@@ -30,20 +27,20 @@ const ACC_SYNTHETIC: u16 = 0x1000; // class field method
 const ACC_ANNOTATION: u16 = 0x2000; // class
 const ACC_ENUM: u16 = 0x4000; // class field
 
-struct Class {
-    access_flags: u16,
-    name: String,
-    super_class: Rc<RefCell<Class>>,
-    super_class_name: String,
-    constant_pool: Box<ConstantPool>,
-    fields: Vec<Field>,
-    methods: Vec<Method>,
-    interfaces: Vec<Class>,
-    interface_names: Vec<String>,
-    loader: Rc<RefCell<ClassLoader>>,
-    instance_slot_count: usize,
-    static_slot_count: usize,
-    static_vars: Vec<Slot>,
+pub struct Class {
+    pub access_flags: u16,
+    pub name: String,
+    pub super_class: Option<Rc<RefCell<Class>>>,
+    pub super_class_name: String,
+    pub constant_pool: Option<Rc<RefCell<ConstantPool>>>,
+    pub fields: Vec<Field>,
+    pub methods: Vec<Method>,
+    pub interfaces: Vec<Rc<RefCell<Class>>>,
+    pub interface_names: Vec<String>,
+    pub loader: Option<Weak<RefCell<ClassLoader>>>,
+    pub instance_slot_count: usize,
+    pub static_slot_count: usize,
+    pub static_vars: Vec<Slot>,
     // init_started: bool,
     // init_thread: Rc<RefCell<Thread>>,
     // clinit_method: Option<Method>,
@@ -52,22 +49,25 @@ struct Class {
 }
 
 impl Class {
-    pub fn new() -> Self {
-        Self {
-            access_flags: 0,
-            name: String::new(),
-            super_class: Rc::new(RefCell::new(Class::new())),
-            super_class_name: String::new(),
-            constant_pool: Box::new(ConstPool::new()),
+    pub fn new(class_file: ClassFile) -> Rc<RefCell<Self>> {
+        let class = Rc::new(RefCell::new(Self {
+            access_flags: class_file.access_flags,
+            name: class_file.this_class.clone(),
+            super_class: None,
+            super_class_name: class_file.super_class.clone(),
+            constant_pool: None,
             fields: vec![],
             methods: vec![],
             interfaces: vec![],
-            interface_names: vec![],
-            loader: Rc::new(RefCell::new(ClassLoader::new())),
+            interface_names: class_file.interfaces.clone(),
+            loader: None,
             instance_slot_count: 0,
             static_slot_count: 0,
             static_vars: vec![],
-        }
+        }));
+        let constant_pool = ConstantPool::new(class.clone(), class_file.const_pool.clone());
+        class.borrow_mut().constant_pool = Some(constant_pool);
+        class
     }
 
     pub fn is_public(&self) -> bool {
@@ -104,7 +104,7 @@ impl Class {
 }
 
 #[derive(Clone)]
-struct ClassMember {
+pub struct ClassMember {
     access_flags: u16,
     name: String,
     descriptor: String,
@@ -129,7 +129,7 @@ impl ClassMember {
 }
 
 #[derive(Clone)]
-struct Field {
+pub struct Field {
     info: ClassMember,
 }
 
@@ -192,7 +192,7 @@ impl Field {
 }
 
 #[derive(Clone)]
-struct Method {
+pub struct Method {
     info: ClassMember,
     max_stack: u16,
     max_locals: u16,
@@ -286,7 +286,7 @@ impl Method {
 }
 
 #[derive(Clone)]
-struct SymRef {
+pub struct SymRef {
     cp: Weak<RefCell<ConstantPool>>,
     class_name: String,
     class: Weak<RefCell<Class>>,
@@ -347,7 +347,7 @@ pub enum Constant {
 }
 
 #[derive(Clone)]
-struct ConstantPool {
+pub struct ConstantPool {
     class: Weak<RefCell<Class>>,
     consts: Vec<Option<Constant>>,
 }
@@ -356,13 +356,13 @@ impl ConstantPool {
     // TODO: It needs an implementation that preallocates all the constant pool slots.
     pub fn new(
         class: Rc<RefCell<Class>>,
-        classfile_constants: &crate::classfile::ConstPool,
+        classfile_constants: Rc<std::cell::RefCell<crate::classfile::ConstPool>>,
     ) -> Rc<RefCell<Self>> {
-        let mut constant_pool = Rc::new(RefCell::new(Self {
+        let constant_pool = Rc::new(RefCell::new(Self {
             class: Rc::downgrade(&class),
             consts: vec![],
         }));
-        for cf_const in classfile_constants {
+        for cf_const in &classfile_constants.borrow().0 {
             match cf_const {
                 Const::Utf8(s) => {
                     constant_pool
@@ -463,7 +463,7 @@ impl ConstantPool {
                             descriptor,
                             method: Box::new(Method::new()),
                         }));
-                },
+                }
                 Const::InterfaceMethodRef {
                     cp,
                     class_index,
@@ -488,7 +488,7 @@ impl ConstantPool {
                             descriptor,
                             method: Box::new(Method::new()),
                         }));
-                },
+                }
                 Const::NameAndType {
                     cp,
                     name_index,
@@ -520,6 +520,7 @@ impl ConstantPool {
         constant_pool
     }
 
+    #[allow(dead_code)]
     pub fn get(&self, index: usize) -> &Constant {
         if let Some(constant) = self.consts[index].as_ref() {
             constant

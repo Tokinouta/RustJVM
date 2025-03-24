@@ -7,6 +7,7 @@ use heap::Object;
 
 pub mod heap;
 pub mod class;
+pub mod class_loader;
 
 #[derive(Clone)]
 pub struct Slot {

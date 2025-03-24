@@ -49,6 +49,8 @@ impl LocalVariableTableEntry {
     }
 }
 
+// Attributes contain addition information about fields and classes
+// The most useful is "Code" attribute, which contains actual byte code
 pub enum Attribute {
     ConstantValue(u16),
     Code {
@@ -69,7 +71,7 @@ pub enum Attribute {
     LineNumberTable {
         line_number_table: Vec<LineNumberTableEntry>,
     },
-    LocalVariableTable{
+    LocalVariableTable {
         local_variable_table: Vec<LocalVariableTableEntry>,
     },
     InnerClasses,
